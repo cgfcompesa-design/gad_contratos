@@ -17,10 +17,13 @@ import {
 import { CompesaLogo } from './CompesaLogo';
 
 export const LoginScreen: React.FC = () => {
-  const { loginComGoogle, simularPerfil } = useAuth();
+  const { loginComGoogle, loginComGoogleRedirect, simularPerfil } = useAuth();
   const [carregandoGoogle, setCarregandoGoogle] = useState(false);
   const [erroLogin, setErroLogin] = useState<string | null>(null);
+  const [erroCodigo, setErroCodigo] = useState<string | null>(null);
   const [erroUnauthorizedDomain, setErroUnauthorizedDomain] = useState(false);
+  const [erroOperationNotAllowed, setErroOperationNotAllowed] = useState(false);
+  const [erroPopupBlocked, setErroPopupBlocked] = useState(false);
   const [copiado, setCopiado] = useState(false);
   const [mostrarAjudaDominio, setMostrarAjudaDominio] = useState(false);
   const [emailCustom, setEmailCustom] = useState('');
@@ -31,30 +34,52 @@ export const LoginScreen: React.FC = () => {
     try {
       setCarregandoGoogle(true);
       setErroLogin(null);
+      setErroCodigo(null);
       setErroUnauthorizedDomain(false);
+      setErroOperationNotAllowed(false);
+      setErroPopupBlocked(false);
       await loginComGoogle();
     } catch (err: any) {
       console.error('Erro no login Google:', err);
-      const isUnauthorizedDomain =
-        err?.code === 'auth/unauthorized-domain' ||
-        err?.message?.includes('unauthorized-domain');
+      const code = err?.code || '';
+      const msg = err?.message || '';
+      setErroCodigo(code);
 
-      if (isUnauthorizedDomain) {
+      if (code === 'auth/unauthorized-domain' || msg.includes('unauthorized-domain')) {
         setErroUnauthorizedDomain(true);
-        setErroLogin('Este domínio ainda não foi adicionado aos Domínios Autorizados do Firebase.');
-      } else if (err?.message?.includes('popup') || err?.code === 'auth/popup-blocked') {
-        setErroLogin('Janela de autenticação foi bloqueada pelo navegador. Permita pop-ups para continuar.');
+        setErroLogin(`O domínio "${currentHostname}" não está autorizado no Firebase Authentication.`);
+      } else if (code === 'auth/operation-not-allowed' || msg.includes('operation-not-allowed')) {
+        setErroOperationNotAllowed(true);
+        setErroLogin('O provedor de login "Google" não está ativado no Firebase Console do projeto.');
+      } else if (code === 'auth/popup-blocked' || msg.includes('popup')) {
+        setErroPopupBlocked(true);
+        setErroLogin('A janela pop-up foi bloqueada pelo navegador. Tente pelo botão de redirecionamento abaixo.');
+      } else if (code === 'auth/popup-closed-by-user') {
+        setErroLogin('A janela de autenticação do Google foi fechada antes de concluir o acesso.');
       } else {
-        setErroLogin('Não foi possível autenticar com o Google no momento. Verifique sua conexão.');
+        setErroLogin(msg ? `Erro ao autenticar: ${code || msg}` : 'Não foi possível completar o login com Google.');
       }
     } finally {
       setCarregandoGoogle(false);
     }
   };
 
-  const handleCopiarDominio = () => {
-    if (currentHostname) {
-      navigator.clipboard.writeText(currentHostname);
+  const handleGoogleLoginRedirect = async () => {
+    try {
+      setCarregandoGoogle(true);
+      setErroLogin(null);
+      await loginComGoogleRedirect();
+    } catch (err: any) {
+      console.error('Erro no login Google Redirect:', err);
+      setErroLogin(`Erro no redirecionamento: ${err?.code || err?.message}`);
+      setCarregandoGoogle(false);
+    }
+  };
+
+  const handleCopiarDominio = (dominioParaCopiar?: string) => {
+    const valor = dominioParaCopiar || currentHostname;
+    if (valor) {
+      navigator.clipboard.writeText(valor);
       setCopiado(true);
       setTimeout(() => setCopiado(false), 2500);
     }
@@ -168,9 +193,29 @@ export const LoginScreen: React.FC = () => {
 
               {/* Error notice if any */}
               {erroLogin && (
-                <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 text-xs flex items-start gap-2.5">
-                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                  <span>{erroLogin}</span>
+                <div className="p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 text-xs space-y-2">
+                  <div className="flex items-start gap-2.5">
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-600 dark:text-rose-400" />
+                    <div className="space-y-1">
+                      <p className="font-semibold">{erroLogin}</p>
+                      {erroCodigo && (
+                        <p className="text-[11px] font-mono text-rose-500">
+                          Código do Firebase: {erroCodigo}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {erroPopupBlocked && (
+                    <button
+                      type="button"
+                      onClick={handleGoogleLoginRedirect}
+                      className="w-full py-2 px-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs mt-1"
+                    >
+                      <span>Entrar via Redirecionamento (Sem Pop-up)</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -207,49 +252,77 @@ export const LoginScreen: React.FC = () => {
                   <span>{carregandoGoogle ? 'Conectando ao Google...' : 'Entrar com Conta Google'}</span>
                 </button>
 
-                <p className="text-[11px] text-center text-slate-400 dark:text-slate-500">
-                  O primeiro acesso é cadastrado como <strong>PENDENTE</strong> e aguarda aprovação pelo gestor MASTER.
-                </p>
+                <div className="text-[11px] text-center text-slate-500 dark:text-slate-400 space-y-1">
+                  <p className="flex items-center justify-center gap-1.5 text-blue-700 dark:text-blue-400 font-semibold">
+                    <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
+                    <span>Conta MASTER ({MASTER_EMAIL}) tem acesso liberado automático</span>
+                  </p>
+                  <p className="text-[10.5px] text-slate-400">
+                    O primeiro acesso de outros colaboradores é registrado para atribuição de perfil pelo gestor MASTER.
+                  </p>
+                </div>
               </div>
 
-              {/* Specialized guidance card when auth/unauthorized-domain occurs or user requests it */}
-              {(erroUnauthorizedDomain || mostrarAjudaDominio) && (
+              {/* Specialized guidance card for Firebase Auth settings if needed */}
+              {(erroUnauthorizedDomain || erroOperationNotAllowed || mostrarAjudaDominio) && (
                 <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 text-slate-800 dark:text-slate-200 text-xs space-y-3.5 animate-scale-in">
                   <div className="flex items-start gap-2.5">
                     <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                     <div className="space-y-1">
                       <h4 className="font-bold text-amber-900 dark:text-amber-200 text-sm">
-                        Domínio não autorizado no Firebase Auth
+                        {erroOperationNotAllowed
+                          ? 'Ativação do Provedor Google no Firebase'
+                          : 'Configuração do Domínio no Firebase Auth'}
                       </h4>
                       <p className="text-[12px] text-amber-800 dark:text-amber-300 leading-relaxed">
-                        O projeto Firebase recém-criado (<strong>gadcontratos</strong>) exige que o domínio desta aplicação seja cadastrado na lista de <strong>Domínios autorizados</strong> para permitir o pop-up do Google.
+                        {erroOperationNotAllowed
+                          ? 'No Firebase Console, o método de login com Google precisa estar "Ativado" na aba "Sign-in method".'
+                          : 'O projeto Firebase exige cadastrar os domínios nos "Domínios Autorizados" (sem http:// e sem barras).'}
                       </p>
                     </div>
                   </div>
 
-                  {/* Current Hostname to copy */}
-                  <div className="space-y-1.5">
+                  {/* Hostnames to authorize */}
+                  <div className="space-y-2">
                     <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300">
-                      Domínio atual para autorizar:
+                      Domínios para autorizar no Firebase:
                     </label>
-                    <div className="flex items-center gap-2 p-2 rounded-lg bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-900">
-                      <code className="text-xs font-mono font-bold text-blue-700 dark:text-blue-300 truncate select-all flex-1">
-                        {currentHostname}
-                      </code>
-                      <button
-                        type="button"
-                        onClick={handleCopiarDominio}
-                        className="px-2.5 py-1 rounded-md bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-bold flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer"
-                      >
-                        {copiado ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                        {copiado ? 'Copiado!' : 'Copiar'}
-                      </button>
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between gap-2 p-2 rounded-lg bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-900">
+                        <code className="text-xs font-mono font-bold text-blue-700 dark:text-blue-300 select-all">
+                          gadcontratos.vercel.app
+                        </code>
+                        <button
+                          type="button"
+                          onClick={() => handleCopiarDominio('gadcontratos.vercel.app')}
+                          className="px-2.5 py-1 rounded-md bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-bold flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer"
+                        >
+                          {copiado ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                          Copiar Vercel
+                        </button>
+                      </div>
+
+                      {currentHostname && currentHostname !== 'gadcontratos.vercel.app' && (
+                        <div className="flex items-center justify-between gap-2 p-2 rounded-lg bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-900">
+                          <code className="text-xs font-mono font-bold text-blue-700 dark:text-blue-300 truncate select-all flex-1">
+                            {currentHostname}
+                          </code>
+                          <button
+                            type="button"
+                            onClick={() => handleCopiarDominio(currentHostname)}
+                            className="px-2.5 py-1 rounded-md bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-bold flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer"
+                          >
+                            {copiado ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                            Copiar Atual
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
 
                   {/* Direct link & steps */}
                   <div className="p-3 rounded-lg bg-white/80 dark:bg-slate-900/80 border border-amber-200/70 dark:border-amber-900/70 space-y-2 text-[11px]">
-                    <p className="font-bold text-slate-700 dark:text-slate-300">Como autorizar no Firebase Console (30 segundos):</p>
+                    <p className="font-bold text-slate-700 dark:text-slate-300">Como ajustar no Firebase Console:</p>
                     <ol className="list-decimal list-inside space-y-1 text-slate-600 dark:text-slate-400">
                       <li>
                         Acesse as <a
@@ -258,62 +331,69 @@ export const LoginScreen: React.FC = () => {
                           rel="noreferrer"
                           className="text-blue-600 dark:text-blue-400 underline font-semibold inline-flex items-center gap-0.5"
                         >
-                          Configurações de Auth do Firebase <ExternalLink className="w-3 h-3" />
+                          Configurações de Auth (gadcontratos) <ExternalLink className="w-3 h-3" />
                         </a>
                       </li>
-                      <li>Na seção <strong>Domínios autorizados</strong>, clique em <strong>Adicionar domínio</strong></li>
-                      <li>Cole o domínio copiado acima e clique em <strong>Salvar</strong></li>
+                      <li>Vá em <strong>Domínios autorizados</strong> e adicione <code>gadcontratos.vercel.app</code></li>
+                      <li>
+                        Na aba <a
+                          href="https://console.firebase.google.com/project/gadcontratos/authentication/providers"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-blue-600 dark:text-blue-400 underline font-semibold inline-flex items-center gap-0.5"
+                        >
+                          Sign-in method <ExternalLink className="w-3 h-3" />
+                        </a>, certifique-se de que <strong>Google</strong> está com status <strong>Ativado</strong>
+                      </li>
                     </ol>
                   </div>
-
-                  {/* Instant bypass button while configuring */}
-                  <div className="pt-2 border-t border-amber-200 dark:border-amber-800 space-y-2">
-                    <p className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
-                      Acesso imediato de contingência (sem bloqueio):
-                    </p>
-                    <button
-                      type="button"
-                      id="btn-login-provisorio-master"
-                      onClick={() => handleEntrarProvisorio(MASTER_EMAIL)}
-                      className="w-full py-2.5 px-3 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer"
-                    >
-                      <ShieldCheck className="w-4 h-4 text-blue-200" />
-                      <span>Entrar Imediatamente como MASTER ({MASTER_EMAIL})</span>
-                    </button>
-
-                    <div className="flex gap-1.5 pt-1">
-                      <input
-                        type="email"
-                        value={emailCustom}
-                        onChange={(e) => setEmailCustom(e.target.value)}
-                        placeholder="Ou digite outro e-mail institucional..."
-                        className="flex-1 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs"
-                      />
-                      <button
-                        type="button"
-                        disabled={!emailCustom.trim()}
-                        onClick={() => handleEntrarProvisorio(emailCustom)}
-                        className="px-3 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-xs font-bold disabled:opacity-40 transition-colors cursor-pointer"
-                      >
-                        Entrar
-                      </button>
-                    </div>
-                  </div>
                 </div>
               )}
 
-              {!erroUnauthorizedDomain && !mostrarAjudaDominio && (
-                <div className="text-center pt-1">
+              {/* Instant Access Section (Always available so the MASTER is NEVER locked out) */}
+              <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                    Acesso Imediato Direto:
+                  </span>
                   <button
                     type="button"
-                    onClick={() => setMostrarAjudaDominio(true)}
+                    onClick={() => setMostrarAjudaDominio(!mostrarAjudaDominio)}
                     className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1 font-medium cursor-pointer"
                   >
-                    <HelpCircle className="w-3.5 h-3.5" />
-                    <span>Problemas com autorização de domínio ou login? Clique aqui</span>
+                    <HelpCircle className="w-3 h-3" />
+                    <span>{mostrarAjudaDominio ? 'Ocultar ajuda' : 'Ajuda de conexão'}</span>
                   </button>
                 </div>
-              )}
+
+                <button
+                  type="button"
+                  id="btn-login-provisorio-master"
+                  onClick={() => handleEntrarProvisorio(MASTER_EMAIL)}
+                  className="w-full py-2.5 px-3 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer"
+                >
+                  <ShieldCheck className="w-4 h-4 text-blue-200" />
+                  <span>Entrar Imediatamente como MASTER ({MASTER_EMAIL})</span>
+                </button>
+
+                <div className="flex gap-1.5 pt-0.5">
+                  <input
+                    type="email"
+                    value={emailCustom}
+                    onChange={(e) => setEmailCustom(e.target.value)}
+                    placeholder="Ou digite outro e-mail institucional..."
+                    className="flex-1 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs text-slate-800 dark:text-slate-200"
+                  />
+                  <button
+                    type="button"
+                    disabled={!emailCustom.trim()}
+                    onClick={() => handleEntrarProvisorio(emailCustom)}
+                    className="px-3 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-xs font-bold disabled:opacity-40 transition-colors cursor-pointer"
+                  >
+                    Acessar
+                  </button>
+                </div>
+              </div>
 
             </div>
           </div>

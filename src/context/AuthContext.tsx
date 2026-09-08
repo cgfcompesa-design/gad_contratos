@@ -3,6 +3,8 @@ import {
   User as FirebaseUser,
   onAuthStateChanged,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signOut as firebaseSignOut
 } from 'firebase/auth';
 import {
@@ -26,6 +28,7 @@ interface AuthContextType {
   isAtivo: boolean;
   isPendente: boolean;
   loginComGoogle: () => Promise<void>;
+  loginComGoogleRedirect: () => Promise<void>;
   logout: () => Promise<void>;
   simularPerfil: (perfil: PerfilUsuario, email?: string) => void;
   modoSimulado: boolean;
@@ -60,37 +63,69 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
 
   useEffect(() => {
+    // Process redirect result if page was reloaded after redirect login
+    getRedirectResult(auth).catch((err) => {
+      console.warn('Redirect login check:', err);
+    });
+
     const unsubscribe = onAuthStateChanged(auth, async (currentFirebaseUser) => {
       setLoading(true);
       if (currentFirebaseUser) {
         setFirebaseUser(currentFirebaseUser);
-        const email = currentFirebaseUser.email?.toLowerCase() || '';
-        const isDefaultMaster = email === MASTER_EMAIL.toLowerCase();
+        const email = (currentFirebaseUser.email || '').toLowerCase().trim();
+        const isDefaultMaster = email === MASTER_EMAIL.toLowerCase().trim();
 
         const userRef = doc(db, 'usuarios', currentFirebaseUser.uid);
 
         // Listen for real-time changes to user profile (e.g. when MASTER approves them)
         const unsubUserDoc = onSnapshot(userRef, async (docSnap) => {
-          if (docSnap.exists()) {
-            const data = docSnap.data() as Usuario;
-            // Always ensure MASTER email maintains MASTER status
-            if (isDefaultMaster && (data.perfil !== 'MASTER' || data.status !== 'ativo')) {
-              await setDoc(userRef, {
-                ...data,
-                perfil: 'MASTER',
-                status: 'ativo'
-              }, { merge: true });
-              setUsuario({
-                ...data,
-                perfil: 'MASTER',
-                status: 'ativo'
-              });
+          try {
+            if (docSnap.exists()) {
+              const data = docSnap.data() as Usuario;
+              // Always ensure MASTER email maintains MASTER status
+              if (isDefaultMaster) {
+                const masterUser: Usuario = {
+                  ...data,
+                  uid: currentFirebaseUser.uid,
+                  nome: data.nome || currentFirebaseUser.displayName || 'Gestor CGF / MASTER',
+                  email: currentFirebaseUser.email || MASTER_EMAIL,
+                  perfil: 'MASTER',
+                  status: 'ativo'
+                };
+                if (data.perfil !== 'MASTER' || data.status !== 'ativo') {
+                  try {
+                    await setDoc(userRef, masterUser, { merge: true });
+                  } catch (writeErr) {
+                    console.warn('Não foi possível persistir status MASTER no Firestore:', writeErr);
+                  }
+                }
+                setUsuario(masterUser);
+              } else {
+                setUsuario(data);
+              }
             } else {
-              setUsuario(data);
+              // First time login
+              const novoUsuario: Usuario = {
+                uid: currentFirebaseUser.uid,
+                nome: currentFirebaseUser.displayName || email.split('@')[0],
+                email: currentFirebaseUser.email || '',
+                fotoUrl: currentFirebaseUser.photoURL || undefined,
+                perfil: isDefaultMaster ? 'MASTER' : 'PENDENTE',
+                status: isDefaultMaster ? 'ativo' : 'pendente',
+                criadoEm: new Date().toISOString()
+              };
+
+              try {
+                await setDoc(userRef, novoUsuario);
+              } catch (writeErr) {
+                console.warn('Não foi possível gravar novo usuário no Firestore:', writeErr);
+              }
+              setUsuario(novoUsuario);
             }
-          } else {
-            // First time login
-            const novoUsuario: Usuario = {
+          } catch (snapshotErr) {
+            console.error('Erro ao processar snapshot de usuário:', snapshotErr);
+            // Fallback safe state
+            setUsuario({
               uid: currentFirebaseUser.uid,
               nome: currentFirebaseUser.displayName || email.split('@')[0],
               email: currentFirebaseUser.email || '',
@@ -98,15 +133,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               perfil: isDefaultMaster ? 'MASTER' : 'PENDENTE',
               status: isDefaultMaster ? 'ativo' : 'pendente',
               criadoEm: new Date().toISOString()
-            };
-
-            await setDoc(userRef, novoUsuario);
-            setUsuario(novoUsuario);
+            });
+          } finally {
+            setLoading(false);
           }
-          setLoading(false);
         }, (err) => {
-          console.error('Erro ao escutar usuario:', err);
-          // Fallback if offline or permissions delay
+          console.error('Erro ao escutar usuario no Firestore:', err);
+          // Fallback if offline, rules blocked, or database not created yet
           const fallbackUser: Usuario = {
             uid: currentFirebaseUser.uid,
             nome: currentFirebaseUser.displayName || email.split('@')[0],
@@ -142,6 +175,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       throw error;
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loginComGoogleRedirect = async () => {
+    try {
+      setLoading(true);
+      await signInWithRedirect(auth, googleProvider);
+    } catch (error) {
+      console.error('Erro no login com Google redirect:', error);
+      throw error;
     }
   };
 
@@ -200,13 +243,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUsuarioSimulado(null);
   };
 
-  const activeUsuario = modoSimulado ? usuarioSimulado : usuario;
+  const rawUsuario = modoSimulado ? usuarioSimulado : usuario;
+  const isMasterUser =
+    rawUsuario?.perfil === 'MASTER' ||
+    (!!rawUsuario?.email && rawUsuario.email.toLowerCase().trim() === MASTER_EMAIL.toLowerCase().trim());
 
-  const isMaster = activeUsuario?.perfil === 'MASTER' || activeUsuario?.email?.toLowerCase() === MASTER_EMAIL.toLowerCase();
+  // Guarantee that MASTER always has status='ativo' and perfil='MASTER'
+  const activeUsuario: Usuario | null = rawUsuario
+    ? (isMasterUser
+        ? {
+            ...rawUsuario,
+            perfil: 'MASTER' as PerfilUsuario,
+            status: 'ativo' as const
+          }
+        : rawUsuario)
+    : null;
+
+  const isMaster = isMasterUser;
   const isApoio = activeUsuario?.perfil === 'APOIO CONTRATOS';
   const isGerente = activeUsuario?.perfil === 'GERENTE';
-  const isAtivo = activeUsuario?.status === 'ativo' || isMaster;
-  const isPendente = activeUsuario?.status === 'pendente' && !isMaster;
+  const isAtivo = !!activeUsuario && (activeUsuario.status === 'ativo' || isMaster);
+  const isPendente = !!activeUsuario && !isMaster && (activeUsuario.status === 'pendente' || activeUsuario.perfil === 'PENDENTE');
 
   return (
     <AuthContext.Provider
@@ -220,6 +277,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isAtivo,
         isPendente,
         loginComGoogle,
+        loginComGoogleRedirect,
         logout,
         simularPerfil,
         modoSimulado,

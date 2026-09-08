@@ -1,19 +1,34 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Usuario } from '../types';
-import { Clock, LogOut, RefreshCw } from 'lucide-react';
+import { Clock, LogOut, RefreshCw, ShieldCheck } from 'lucide-react';
 import { MASTER_EMAIL } from '../context/AuthContext';
 import { CompesaLogo } from './CompesaLogo';
 
 interface AguardandoAprovacaoProps {
   usuario: Usuario;
   onLogout: () => void;
-  onSimularPerfil?: (perfil: any) => void;
+  onSimularPerfil?: (perfil: any, email?: string) => void;
 }
 
 export const AguardandoAprovacao: React.FC<AguardandoAprovacaoProps> = ({
   usuario,
-  onLogout
+  onLogout,
+  onSimularPerfil
 }) => {
+  const isMasterAccount =
+    usuario?.email?.toLowerCase().trim() === MASTER_EMAIL.toLowerCase().trim() ||
+    usuario?.perfil === 'MASTER';
+
+  // Auto-promote if master account gets here
+  useEffect(() => {
+    if (isMasterAccount && onSimularPerfil) {
+      const timer = setTimeout(() => {
+        onSimularPerfil('MASTER', MASTER_EMAIL);
+      }, 800);
+      return () => clearTimeout(timer);
+    }
+  }, [isMasterAccount, onSimularPerfil]);
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center p-4">
       <div className="max-w-md w-full bg-white dark:bg-slate-900 rounded-3xl shadow-xl border border-slate-200 dark:border-slate-800 p-6 md:p-8 text-center space-y-5 animate-scale-in">
@@ -59,6 +74,19 @@ export const AguardandoAprovacao: React.FC<AguardandoAprovacaoProps> = ({
         </p>
 
         <div className="flex flex-col gap-2 pt-2">
+          {isMasterAccount && (
+            <button
+              onClick={() => {
+                if (onSimularPerfil) onSimularPerfil('MASTER', MASTER_EMAIL);
+                else window.location.reload();
+              }}
+              className="w-full py-2.5 px-4 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <ShieldCheck className="w-4 h-4 text-blue-200" />
+              Liberar Acesso MASTER Imediato
+            </button>
+          )}
+
           <button
             onClick={() => window.location.reload()}
             className="w-full py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
