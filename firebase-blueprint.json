@@ -1,0 +1,146 @@
+{
+  "entities": {
+    "ContratoVigente": {
+      "title": "ContratoVigente",
+      "description": "Contrato já vigente da GAD importado da planilha ou originado de Licitação",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Identificador do contrato" },
+        "numero": { "type": "number", "description": "Número sequencial da planilha" },
+        "gestor": { "type": "string", "description": "Gestor responsável pelo contrato" },
+        "numeroContrato": { "type": "string", "description": "Número oficial (ex: CT.PS.23.2.203)" },
+        "projeto": { "type": "string", "description": "Código do projeto (ex: GO014DGC17)" },
+        "empresa": { "type": "string", "description": "Razão social da empresa contratada" },
+        "objeto": { "type": "string", "description": "Descrição resumida do objeto contratual" },
+        "valorAnual": { "type": "number", "description": "Valor anual contratado em R$" },
+        "dataOrdemServico": { "type": "string", "description": "Data da Ordem de Serviço (ref para Reajuste)" },
+        "dataInicialExecucao": { "type": "string", "description": "Data inicial de execução" },
+        "dataFinalExecucao": { "type": "string", "description": "Data final de execução (ref para Aditivo)" },
+        "dataInicialVigencia": { "type": "string", "description": "Data inicial de vigência" },
+        "dataFinalVigencia": { "type": "string", "description": "Data final de vigência" },
+        "statusPrazo": { "type": "string", "description": "Status calculado: venceu, vence_hoje, menos_4_meses, mais_4_meses" },
+        "situacaoManual": { "type": "string", "description": "Observação manual exibida quando sem processo ativo" },
+        "criadoEm": { "type": "string", "format": "date-time", "description": "Data de cadastro" },
+        "atualizadoEm": { "type": "string", "format": "date-time", "description": "Data da última atualização" }
+      },
+      "required": ["numeroContrato", "empresa", "objeto", "criadoEm"]
+    },
+    "ProcessoContrato": {
+      "title": "ProcessoContrato",
+      "description": "Processo de contratação, licitação, aditivo ou reajuste da GAD/COMPESA",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Identificador do documento" },
+        "numeroProcesso": { "type": "string", "description": "Número do processo ou protocolo SEI" },
+        "lotacaoDestino": { "type": "string", "description": "Lotação responsável (GAD, CGF ou CSG)" },
+        "tipoAcao": { "type": "string", "description": "Tipo de ação que define o fluxo de etapas" },
+        "descricaoObjeto": { "type": "string", "description": "Descrição do objeto do contrato" },
+        "empresaContratada": { "type": "string", "description": "Razão social ou nome fantasia do fornecedor" },
+        "valorEstimado": { "type": "number", "description": "Valor estimado ou contratado em reais" },
+        "statusGeral": { "type": "string", "description": "Status geral do processo" },
+        "progressoPercentual": { "type": "number", "description": "Percentual concluído (0-100)" },
+        "etapasTotal": { "type": "number", "description": "Quantidade total de etapas" },
+        "etapasConcluidas": { "type": "number", "description": "Quantidade de etapas concluídas" },
+        "criadoEm": { "type": "string", "format": "date-time", "description": "Data de criação em ISO" },
+        "criadoPor": { "type": "string", "description": "Nome do criador" },
+        "criadoPorEmail": { "type": "string", "description": "Email do criador" },
+        "atualizadoEm": { "type": "string", "format": "date-time", "description": "Data da última atualização" }
+      },
+      "required": ["descricaoObjeto", "lotacaoDestino", "tipoAcao", "statusGeral", "criadoEm"]
+    },
+    "EtapaProcesso": {
+      "title": "EtapaProcesso",
+      "description": "Etapa sequencial de um processo de contrato",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Identificador da etapa" },
+        "processoId": { "type": "string", "description": "ID do processo pai" },
+        "nome": { "type": "string", "description": "Título descritivo da etapa" },
+        "ordem": { "type": "number", "description": "Posição ordinal no fluxo" },
+        "status": { "type": "string", "description": "Status da etapa (nao_iniciada, em_andamento, concluida, etc.)" },
+        "diasCorridos": { "type": "number", "description": "Quantidade de dias decorridos" },
+        "dataInicio": { "type": "string", "format": "date-time", "description": "Data de início da etapa" },
+        "dataConclusao": { "type": "string", "format": "date-time", "description": "Data de conclusão da etapa" },
+        "responsavelConclusao": { "type": "string", "description": "Nome do usuário que concluiu" },
+        "emailResponsavelConclusao": { "type": "string", "description": "Email do usuário que concluiu" },
+        "observacao": { "type": "string", "description": "Anotações e pareceres" },
+        "condicional": { "type": "boolean", "description": "Se a etapa é condicional" },
+        "prazoEstimadoDias": { "type": "number", "description": "Estimativa em dias da etapa" }
+      },
+      "required": ["processoId", "nome", "ordem", "status"]
+    },
+    "LogAcao": {
+      "title": "LogAcao",
+      "description": "Registro de auditoria de alterações no processo",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Identificador do log" },
+        "processoId": { "type": "string", "description": "ID do processo associado" },
+        "etapaId": { "type": "string", "description": "ID da etapa opcional" },
+        "tipo": { "type": "string", "description": "Tipo de evento de auditoria" },
+        "descricao": { "type": "string", "description": "Texto descritivo do evento" },
+        "usuarioNome": { "type": "string", "description": "Nome de quem realizou a ação" },
+        "usuarioEmail": { "type": "string", "description": "Email de quem realizou a ação" },
+        "timestamp": { "type": "string", "format": "date-time", "description": "Carimbo de data/hora ISO" }
+      },
+      "required": ["processoId", "tipo", "descricao", "usuarioNome", "usuarioEmail", "timestamp"]
+    },
+    "Usuario": {
+      "title": "Usuario",
+      "description": "Cadastro e nível de permissão de usuário no sistema",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "UID do usuário no Firebase Auth" },
+        "nome": { "type": "string", "description": "Nome completo" },
+        "email": { "type": "string", "description": "E-mail de autenticação Google" },
+        "fotoUrl": { "type": "string", "description": "URL do avatar do Google" },
+        "perfil": { "type": "string", "enum": ["MASTER", "APOIO CONTRATOS", "GERENTE", "PENDENTE"], "description": "Perfil de acesso" },
+        "status": { "type": "string", "enum": ["ativo", "pendente", "inativo"], "description": "Status de ativação" },
+        "criadoEm": { "type": "string", "format": "date-time", "description": "Data de cadastro" },
+        "aprovadoPor": { "type": "string", "description": "Nome do MASTER que aprovou" },
+        "aprovadoEm": { "type": "string", "format": "date-time", "description": "Data de aprovação" }
+      },
+      "required": ["uid", "nome", "email", "perfil", "status", "criadoEm"]
+    },
+    "AuditoriaGeral": {
+      "title": "AuditoriaGeral",
+      "description": "Log centralizado de ações do sistema",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Identificador do registro" },
+        "tipo": { "type": "string", "description": "Tipo de evento" },
+        "descricao": { "type": "string", "description": "Descrição da ação" },
+        "usuarioNome": { "type": "string", "description": "Nome do usuário" },
+        "usuarioEmail": { "type": "string", "description": "Email do usuário" },
+        "timestamp": { "type": "string", "format": "date-time", "description": "Data e hora do registro" }
+      },
+      "required": ["tipo", "descricao", "usuarioNome", "usuarioEmail", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/contratosVigentes/{contratoId}": {
+      "schema": "ContratoVigente",
+      "description": "Base de contratos vigentes da GAD com prazos e status calculados"
+    },
+    "/processos/{processoId}": {
+      "schema": "ProcessoContrato",
+      "description": "Coleção de processos de contratação e seus dados cadastrais"
+    },
+    "/processos/{processoId}/etapas/{etapaId}": {
+      "schema": "EtapaProcesso",
+      "description": "Subcoleção contendo as etapas consecutivas do fluxo de cada processo"
+    },
+    "/processos/{processoId}/logs/{logId}": {
+      "schema": "LogAcao",
+      "description": "Subcoleção com registros cronológicos imutáveis de alterações no processo"
+    },
+    "/usuarios/{userId}": {
+      "schema": "Usuario",
+      "description": "Coleção de contas de usuário e controle de papéis/aprovação"
+    },
+    "/auditoria_geral/{auditId}": {
+      "schema": "AuditoriaGeral",
+      "description": "Trilha geral de auditoria e segurança administrativa"
+    }
+  }
+}

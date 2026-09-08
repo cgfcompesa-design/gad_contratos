@@ -12,7 +12,7 @@ import {
   orderBy,
   writeBatch
 } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db, auth } from '../firebase';
 import {
   ProcessoContrato,
   EtapaProcesso,
@@ -23,9 +23,59 @@ import {
   TipoAcao,
   StatusEtapa,
   StatusGeralProcesso,
-  AnexoEtapa
+  AnexoEtapa,
+  ContratoVigente,
+  StatusPrazo
 } from '../types';
 import { TEMPLATES_FLUXOS } from '../data/flowTemplates';
+import { calcularStatusPrazo, CONTRATOS_EXEMPLO_GAD } from '../data/sampleContratos';
+
+export enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+export interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+    isAnonymous?: boolean | null;
+    tenantId?: string | null;
+    providerInfo?: {
+      providerId?: string | null;
+      email?: string | null;
+    }[];
+  };
+}
+
+export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null): never {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+      tenantId: auth.currentUser?.tenantId,
+      providerInfo: auth.currentUser?.providerData?.map((provider) => ({
+        providerId: provider.providerId,
+        email: provider.email,
+      })) || []
+    },
+    operationType,
+    path
+  };
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
 
 // Helper to calculate business/calendar days
 export function calcularDiasCorridos(inicioStr?: string | null, fimStr?: string | null): number {
@@ -168,28 +218,287 @@ export async function registrarLog(
   }
 }
 
+// 4b. Subscribe to Contratos Vigentes (real-time from planilha GAD)
+export function subscribeContratosVigentes(
+  callback: (contratos: ContratoVigente[]) => void,
+  onError?: (err: Error) => void
+) {
+  const colRef = collection(db, 'contratosVigentes');
+  return onSnapshot(
+    colRef,
+    (snapshot) => {
+      const lista: ContratoVigente[] = [];
+      snapshot.forEach((d) => {
+        const data = d.data() as ContratoVigente;
+        const statusPrazo = calcularStatusPrazo(data.dataFinalExecucao);
+        lista.push({
+          id: d.id,
+          ...data,
+          statusPrazo
+        });
+      });
+      // Sort by sequence number ascending
+      lista.sort((a, b) => (a.numero || 0) - (b.numero || 0));
+      callback(lista);
+    },
+    (error) => {
+      console.error('Erro ao escutar contratos vigentes:', error);
+      if (onError) onError(error);
+    }
+  );
+}
+
+// 4c. Create a new Contrato Vigente
+export async function criarContratoVigente(
+  dados: Omit<ContratoVigente, 'id' | 'criadoEm' | 'atualizadoEm' | 'statusPrazo'>,
+  usuarioAtual: Usuario
+): Promise<string> {
+  const colRef = collection(db, 'contratosVigentes');
+  const agora = new Date().toISOString();
+  const statusPrazo = calcularStatusPrazo(dados.dataFinalExecucao);
+
+  const docRef = await addDoc(colRef, {
+    ...dados,
+    statusPrazo,
+    criadoEm: agora,
+    atualizadoEm: agora
+  });
+
+  try {
+    await addDoc(collection(db, 'auditoria_geral'), {
+      contratoId: docRef.id,
+      usuario: usuarioAtual.nome,
+      email: usuarioAtual.email,
+      acao: `Cadastrou o contrato vigente #${dados.numeroContrato} (${dados.empresa})`,
+      dataHora: agora,
+      referencia: `Contrato: ${dados.numeroContrato}`,
+      tipoAcao: 'criacao'
+    });
+  } catch {
+    // Non-blocking
+  }
+
+  return docRef.id;
+}
+
+// 4d. Update Contrato Vigente
+export async function atualizarContratoVigente(
+  contratoId: string,
+  dados: Partial<ContratoVigente>,
+  usuarioAtual: Usuario
+) {
+  const docRef = doc(db, 'contratosVigentes', contratoId);
+  const agora = new Date().toISOString();
+  const statusPrazo = dados.dataFinalExecucao ? calcularStatusPrazo(dados.dataFinalExecucao) : undefined;
+
+  const updatePayload: any = {
+    ...dados,
+    atualizadoEm: agora
+  };
+  if (statusPrazo) updatePayload.statusPrazo = statusPrazo;
+
+  await updateDoc(docRef, updatePayload);
+
+  try {
+    await addDoc(collection(db, 'auditoria_geral'), {
+      contratoId,
+      usuario: usuarioAtual.nome,
+      email: usuarioAtual.email,
+      acao: `Atualizou os dados do contrato vigente`,
+      dataHora: agora,
+      referencia: `Contrato ID: ${contratoId}`,
+      tipoAcao: 'edicao'
+    });
+  } catch {
+    // Non-blocking
+  }
+}
+
+// 4e. Update Situacao Manual (when no active process)
+export async function atualizarSituacaoManualContrato(
+  contratoId: string,
+  situacaoManual: string,
+  usuarioAtual: Usuario
+) {
+  const docRef = doc(db, 'contratosVigentes', contratoId);
+  await updateDoc(docRef, {
+    situacaoManual: situacaoManual.trim(),
+    atualizadoEm: new Date().toISOString()
+  });
+
+  try {
+    await addDoc(collection(db, 'auditoria_geral'), {
+      contratoId,
+      usuario: usuarioAtual.nome,
+      email: usuarioAtual.email,
+      acao: `Definiu observação de situação manual: "${situacaoManual.trim()}"`,
+      dataHora: new Date().toISOString(),
+      referencia: `Contrato ID: ${contratoId}`,
+      tipoAcao: 'edicao'
+    });
+  } catch {
+    // Non-blocking
+  }
+}
+
+// 4f. Delete Contrato Vigente
+export async function excluirContratoVigente(
+  contratoId: string,
+  numeroContrato: string,
+  usuarioAtual: Usuario
+) {
+  const docRef = doc(db, 'contratosVigentes', contratoId);
+  await deleteDoc(docRef);
+
+  try {
+    await addDoc(collection(db, 'auditoria_geral'), {
+      contratoId,
+      usuario: usuarioAtual.nome,
+      email: usuarioAtual.email,
+      acao: `Excluiu o contrato vigente #${numeroContrato}`,
+      dataHora: new Date().toISOString(),
+      referencia: `Contrato #${numeroContrato}`,
+      tipoAcao: 'exclusao'
+    });
+  } catch {
+    // Non-blocking
+  }
+}
+
+// 4g. Import batch contracts (from CSV or spreadsheet)
+export async function importarContratosEmLote(
+  contratos: Omit<ContratoVigente, 'id' | 'criadoEm' | 'atualizadoEm' | 'statusPrazo'>[],
+  usuarioAtual: Usuario
+): Promise<number> {
+  const agora = new Date().toISOString();
+  const batch = writeBatch(db);
+  const colRef = collection(db, 'contratosVigentes');
+
+  contratos.forEach((c) => {
+    const docRef = doc(colRef);
+    const statusPrazo = calcularStatusPrazo(c.dataFinalExecucao);
+    batch.set(docRef, {
+      ...c,
+      statusPrazo,
+      criadoEm: agora,
+      atualizadoEm: agora
+    });
+  });
+
+  await batch.commit();
+
+  try {
+    await addDoc(collection(db, 'auditoria_geral'), {
+      usuario: usuarioAtual.nome,
+      email: usuarioAtual.email,
+      acao: `Importou lote de ${contratos.length} contratos vigentes`,
+      dataHora: agora,
+      referencia: 'Importação em Lote',
+      tipoAcao: 'criacao'
+    });
+  } catch {
+    // Non-blocking
+  }
+
+  return contratos.length;
+}
+
+// 4h. Convert concluded/homologated Licitação process into a new Contrato Vigente
+export async function converterProcessoEmContratoVigente(
+  processo: ProcessoContrato,
+  usuarioAtual: Usuario,
+  dadosExtras?: {
+    numeroContrato?: string;
+    projeto?: string;
+    gestor?: string;
+    dataOrdemServico?: string;
+    dataInicialExecucao?: string;
+    dataFinalExecucao?: string;
+  }
+): Promise<string> {
+  const colRef = collection(db, 'contratosVigentes');
+  const snap = await getDocs(colRef);
+  const nextNumero = snap.size + 1;
+  const agora = new Date().toISOString();
+  const dataFinalExec = dadosExtras?.dataFinalExecucao || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+  const novoContrato: Omit<ContratoVigente, 'id'> = {
+    numero: nextNumero,
+    gestor: dadosExtras?.gestor || usuarioAtual.nome,
+    numeroContrato: dadosExtras?.numeroContrato || processo.numeroProcesso || `CT.PS.${new Date().getFullYear() % 100}.1.${Math.floor(100 + Math.random() * 900)}`,
+    projeto: dadosExtras?.projeto || (processo.lotacaoDestino.includes('CGF') ? 'CGF001FLT' : processo.lotacaoDestino.includes('CSG') ? 'CSG001MNT' : 'GAD001ADM'),
+    empresa: processo.empresaContratada || 'Empresa Vencedora da Licitação',
+    objeto: processo.descricaoObjeto,
+    valorAnual: processo.valorEstimado || 0,
+    dataOrdemServico: dadosExtras?.dataOrdemServico || agora.split('T')[0],
+    dataInicialExecucao: dadosExtras?.dataInicialExecucao || agora.split('T')[0],
+    dataFinalExecucao: dataFinalExec,
+    dataInicialVigencia: dadosExtras?.dataInicialExecucao || agora.split('T')[0],
+    dataFinalVigencia: dataFinalExec,
+    statusPrazo: calcularStatusPrazo(dataFinalExec),
+    situacaoManual: '',
+    criadoEm: agora,
+    atualizadoEm: agora
+  };
+
+  const docRef = await addDoc(colRef, novoContrato);
+
+  // Link back to the process
+  await updateDoc(doc(db, 'processos', processo.id), {
+    contratoVigenteId: docRef.id,
+    atualizadoEm: agora
+  });
+
+  await registrarLog(processo.id, {
+    usuario: usuarioAtual.nome,
+    email: usuarioAtual.email,
+    acao: `Converteu o processo de Licitação no Contrato Vigente oficial #${novoContrato.numeroContrato}`,
+    referencia: `Contrato: ${novoContrato.numeroContrato}`,
+    tipoAcao: 'criacao',
+    detalhes: `Novo contrato registrado na base da GAD com ID: ${docRef.id}`
+  });
+
+  return docRef.id;
+}
+
 // 5. Create new process with all default stages
 export async function criarNovoProcesso(dados: {
   lotacaoDestino: ProcessoContrato['lotacaoDestino'];
   tipoAcao: TipoAcao;
   descricaoObjeto: string;
+  contratoVigenteId?: string | null;
+  dataReferencia?: string | null;
   numeroProcesso?: string;
   empresaContratada?: string;
   valorEstimado?: number;
   usuarioAtual: Usuario;
 }): Promise<string> {
-  const { lotacaoDestino, tipoAcao, descricaoObjeto, numeroProcesso, empresaContratada, valorEstimado, usuarioAtual } = dados;
+  const {
+    lotacaoDestino,
+    tipoAcao,
+    descricaoObjeto,
+    contratoVigenteId,
+    dataReferencia,
+    numeroProcesso,
+    empresaContratada,
+    valorEstimado,
+    usuarioAtual
+  } = dados;
   const agora = new Date().toISOString();
 
   const processoRef = doc(collection(db, 'processos'));
   const processoId = processoRef.id;
 
   const template = TEMPLATES_FLUXOS[tipoAcao] || [];
+  const primeiraEtapaNome = template[0]?.nome || null;
 
   const novoProcesso: Omit<ProcessoContrato, 'id'> = {
     lotacaoDestino,
     tipoAcao,
     descricaoObjeto,
+    contratoVigenteId: contratoVigenteId || null,
+    dataReferencia: dataReferencia || null,
+    proximaEtapaPendenteNome: primeiraEtapaNome,
     numeroProcesso: numeroProcesso?.trim() || `PROC-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
     empresaContratada: empresaContratada || '',
     valorEstimado: valorEstimado || 0,
@@ -331,12 +640,19 @@ export async function atualizarStatusEtapa(params: {
     novoStatusGeral = 'nao_iniciado';
   }
 
+  // Find next pending or in-progress stage to feed dynamic Situação Atual
+  const pendenteOuAndamento = etapasAtualizadas
+    .filter((e) => e.status !== 'concluida' && e.status !== 'nao_aplicavel')
+    .sort((a, b) => a.ordem - b.ordem);
+  const proximaEtapaPendenteNome = pendenteOuAndamento.length > 0 ? pendenteOuAndamento[0].nome : null;
+
   const processoRef = doc(db, 'processos', processoId);
   await updateDoc(processoRef, {
     etapasTotal: total,
     etapasConcluidas: concluidasReais,
     progressoPercentual: percentual,
     statusGeral: novoStatusGeral,
+    proximaEtapaPendenteNome,
     atualizadoEm: agora
   });
 
@@ -533,17 +849,43 @@ export async function atualizarUsuarioPerfil(params: {
 // 14. Seed default sample data if empty
 export async function seedExemplosSeVazio(usuarioAtual: Usuario) {
   try {
-    const snap = await getDocs(collection(db, 'processos'));
-    if (!snap.empty) {
-      return; // Already has data
+    // 1. Seed Contratos Vigentes se a coleção estiver vazia
+    const contratosSnap = await getDocs(collection(db, 'contratosVigentes'));
+    const contratoIdMap: Record<string, string> = {};
+
+    if (contratosSnap.empty) {
+      console.log('Populando base de Contratos Vigentes da GAD...');
+      const agora = new Date().toISOString();
+
+      for (const item of CONTRATOS_EXEMPLO_GAD) {
+        const statusPrazo = calcularStatusPrazo(item.dataFinalExecucao);
+        const docRef = await addDoc(collection(db, 'contratosVigentes'), {
+          ...item,
+          statusPrazo,
+          criadoEm: agora,
+          atualizadoEm: agora
+        });
+        contratoIdMap[item.numeroContrato] = docRef.id;
+      }
+    } else {
+      contratosSnap.forEach((d) => {
+        const c = d.data() as ContratoVigente;
+        if (c.numeroContrato) contratoIdMap[c.numeroContrato] = d.id;
+      });
     }
 
-    console.log('Populando dados iniciais da GAD...');
+    // 2. Seed Processos se a coleção estiver vazia
+    const procSnap = await getDocs(collection(db, 'processos'));
+    if (!procSnap.empty) {
+      return; // Already has processes
+    }
 
-    // Exemplo 1: Licitação de Mão de Obra para GAD
+    console.log('Populando processos e fluxos da GAD...');
+
+    // Processo 1: Licitação de Novo Contrato para GAD
     const id1 = await criarNovoProcesso({
       lotacaoDestino: 'GAD — Gerência Administrativa e de Suporte',
-      tipoAcao: 'LICITAÇÃO / NOVO CONTRATO com Mão de Obra',
+      tipoAcao: 'LICITAÇÃO / NOVO CONTRATO',
       descricaoObjeto: 'Contratação de serviços continuados de apoio administrativo, recepção e copeiragem com dedicação exclusiva de mão de obra para os prédios da Sede e Unidades Regionais da COMPESA.',
       numeroProcesso: 'PROC-2026-0814',
       empresaContratada: 'Consórcio ServSul Gestão & Serviços',
@@ -551,41 +893,44 @@ export async function seedExemplosSeVazio(usuarioAtual: Usuario) {
       usuarioAtual
     });
 
-    // Exemplo 2: Aditivo na Coordenação de Gestão de Frotas (CGF)
+    // Processo 2: Aditivo em Contrato Vigente (CT.PS.23.2.203)
     const id2 = await criarNovoProcesso({
-      lotacaoDestino: 'CGF — Coordenação de Gestão de Frotas',
+      lotacaoDestino: 'GAD — Gerência Administrativa e de Suporte',
       tipoAcao: 'ADITIVO (RENOVAÇÃO/SUPRESSÃO/ACRÉSCIMO) EM CONTRATO',
-      descricaoObjeto: '1º Termo Aditivo de renovação do Contrato de locação e manutenção preventiva/corretiva de veículos operacionais leves e utilitários da frota COMPESA.',
-      numeroProcesso: 'PROC-2026-1120',
-      empresaContratada: 'Locavel Frotas Nordeste S/A',
-      valorEstimado: 1720000.0,
+      descricaoObjeto: '1º Termo Aditivo de prorrogação e readequação de quantitativos do Contrato CT.PS.23.2.203 de apoio operacional.',
+      numeroProcesso: 'ADIT-2026-0203',
+      contratoVigenteId: contratoIdMap['CT.PS.23.2.203'] || null,
+      dataReferencia: '2026-10-15',
+      empresaContratada: 'ServSul Gestão & Facilities Ltda',
+      valorEstimado: 4850000.0,
       usuarioAtual
     });
 
-    // Exemplo 3: Reajuste Retroativo na CSG
+    // Processo 3: Reajuste Retroativo em Contrato Vigente (CT.PS.24.1.089)
     const id3 = await criarNovoProcesso({
       lotacaoDestino: 'CSG — Coordenação de Serviços Gerais',
       tipoAcao: 'REAJUSTE RETROATIVO EM CONTRATO',
       descricaoObjeto: 'Reajuste retroativo por índice IPCA referente ao período 2024-2025 para contrato de manutenção predial e climatização.',
-      numeroProcesso: 'PROC-2026-0419',
+      numeroProcesso: 'REAJ-2026-0419',
+      contratoVigenteId: contratoIdMap['CT.PS.24.1.089'] || null,
+      dataReferencia: '2024-03-20',
       empresaContratada: 'ClimaFrio Engenharia Térmica Ltda',
-      valorEstimado: 340000.0,
+      valorEstimado: 890000.0,
       usuarioAtual
     });
 
-    // Advance some stages in sample 1 to make Gantt and Kanban immediately impressive
-    const etapasSnap = await getDocs(collection(db, 'processos', id1, 'etapas'));
-    const etapasList: EtapaProcesso[] = [];
-    etapasSnap.forEach((docSnap) => {
-      etapasList.push({ id: docSnap.id, ...docSnap.data() } as EtapaProcesso);
+    const diasAtras = (dias: number) => new Date(Date.now() - dias * 24 * 60 * 60 * 1000).toISOString();
+
+    // Advance stages in Licitação (Proc 1)
+    const etapas1Snap = await getDocs(collection(db, 'processos', id1, 'etapas'));
+    const etapas1List: EtapaProcesso[] = [];
+    etapas1Snap.forEach((docSnap) => {
+      etapas1List.push({ id: docSnap.id, ...docSnap.data() } as EtapaProcesso);
     });
-    etapasList.sort((a, b) => a.ordem - b.ordem);
+    etapas1List.sort((a, b) => a.ordem - b.ordem);
 
-    if (etapasList.length >= 6) {
-      // Mark step 1, 2, 3 as done with days, step 4 as in progress
-      const diasAtras = (dias: number) => new Date(Date.now() - dias * 24 * 60 * 60 * 1000).toISOString();
-
-      await updateDoc(doc(db, 'processos', id1, 'etapas', etapasList[0].id), {
+    if (etapas1List.length >= 4) {
+      await updateDoc(doc(db, 'processos', id1, 'etapas', etapas1List[0].id), {
         status: 'concluida',
         dataInicio: diasAtras(25),
         dataConclusao: diasAtras(18),
@@ -595,7 +940,7 @@ export async function seedExemplosSeVazio(usuarioAtual: Usuario) {
         observacao: 'Planilha de dimensionamento de postos validada com todas as gerências.'
       });
 
-      await updateDoc(doc(db, 'processos', id1, 'etapas', etapasList[1].id), {
+      await updateDoc(doc(db, 'processos', id1, 'etapas', etapas1List[1].id), {
         status: 'concluida',
         dataInicio: diasAtras(18),
         dataConclusao: diasAtras(10),
@@ -605,7 +950,7 @@ export async function seedExemplosSeVazio(usuarioAtual: Usuario) {
         observacao: 'Pesquisa com base em Acordo Coletivo e convenção sindical regional.'
       });
 
-      await updateDoc(doc(db, 'processos', id1, 'etapas', etapasList[2].id), {
+      await updateDoc(doc(db, 'processos', id1, 'etapas', etapas1List[2].id), {
         status: 'concluida',
         dataInicio: diasAtras(10),
         dataConclusao: diasAtras(4),
@@ -614,16 +959,84 @@ export async function seedExemplosSeVazio(usuarioAtual: Usuario) {
         emailResponsavelConclusao: usuarioAtual.email
       });
 
-      await updateDoc(doc(db, 'processos', id1, 'etapas', etapasList[3].id), {
+      await updateDoc(doc(db, 'processos', id1, 'etapas', etapas1List[3].id), {
         status: 'em_andamento',
         dataInicio: diasAtras(4),
         observacao: 'Aguardando validação jurídica do capítulo de sanções administrativas.'
       });
 
-      // Update parent process 1 metrics
       await updateDoc(doc(db, 'processos', id1), {
         etapasConcluidas: 3,
-        progressoPercentual: Math.round((3 / etapasList.length) * 100),
+        progressoPercentual: Math.round((3 / etapas1List.length) * 100),
+        proximaEtapaPendenteNome: etapas1List[3].nome,
+        statusGeral: 'em_andamento'
+      });
+    }
+
+    // Advance stages in Aditivo (Proc 2): 5 steps completed, 6th pending: "Carta de concordância (Contratada)"
+    const etapas2Snap = await getDocs(collection(db, 'processos', id2, 'etapas'));
+    const etapas2List: EtapaProcesso[] = [];
+    etapas2Snap.forEach((docSnap) => {
+      etapas2List.push({ id: docSnap.id, ...docSnap.data() } as EtapaProcesso);
+    });
+    etapas2List.sort((a, b) => a.ordem - b.ordem);
+
+    if (etapas2List.length >= 6) {
+      // Complete steps 0, 1, 2, 3, 4
+      for (let i = 0; i < 5; i++) {
+        await updateDoc(doc(db, 'processos', id2, 'etapas', etapas2List[i].id), {
+          status: 'concluida',
+          dataInicio: diasAtras(30 - i * 5),
+          dataConclusao: diasAtras(25 - i * 5),
+          diasCorridos: 5,
+          responsavelConclusao: usuarioAtual.nome,
+          emailResponsavelConclusao: usuarioAtual.email
+        });
+      }
+
+      // Step 5 (index 5) is "Carta de concordância (Contratada)" -> set as em_andamento / pendente
+      await updateDoc(doc(db, 'processos', id2, 'etapas', etapas2List[5].id), {
+        status: 'em_andamento',
+        dataInicio: diasAtras(2),
+        observacao: 'Ofício enviado à empresa contratada, aguardando manifestação formal.'
+      });
+
+      await updateDoc(doc(db, 'processos', id2), {
+        etapasConcluidas: 5,
+        progressoPercentual: Math.round((5 / etapas2List.length) * 100),
+        proximaEtapaPendenteNome: etapas2List[5].nome, // "Carta de concordância (Contratada)"
+        statusGeral: 'em_andamento'
+      });
+    }
+
+    // Advance stages in Reajuste (Proc 3): step 0 done, step 1 pending: "Cálculo de reajuste retroativo (CCR)"
+    const etapas3Snap = await getDocs(collection(db, 'processos', id3, 'etapas'));
+    const etapas3List: EtapaProcesso[] = [];
+    etapas3Snap.forEach((docSnap) => {
+      etapas3List.push({ id: docSnap.id, ...docSnap.data() } as EtapaProcesso);
+    });
+    etapas3List.sort((a, b) => a.ordem - b.ordem);
+
+    if (etapas3List.length >= 2) {
+      await updateDoc(doc(db, 'processos', id3, 'etapas', etapas3List[0].id), {
+        status: 'concluida',
+        dataInicio: diasAtras(12),
+        dataConclusao: diasAtras(7),
+        diasCorridos: 5,
+        responsavelConclusao: 'Protocolo Central',
+        emailResponsavelConclusao: 'protocolo@compesa.com.br'
+      });
+
+      await updateDoc(doc(db, 'processos', id3, 'etapas', etapas3List[1].id), {
+        status: 'em_andamento',
+        dataInicio: diasAtras(7),
+        observacao: 'Memória de cálculo em análise técnica na Coordenação de Custos (CCR).'
+      });
+
+      await updateDoc(doc(db, 'processos', id3), {
+        etapasConcluidas: 1,
+        progressoPercentual: Math.round((1 / etapas3List.length) * 100),
+        proximaEtapaPendenteNome: etapas3List[1].nome,
         statusGeral: 'em_andamento'
       });
     }

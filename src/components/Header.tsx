@@ -11,31 +11,38 @@ import {
   Kanban,
   Sparkles,
   ChevronDown,
-  UserCheck
+  FileText,
+  Layers,
+  CheckCircle2
 } from 'lucide-react';
 import { PerfilUsuario } from '../types';
 
 interface HeaderProps {
-  currentView: 'grid' | 'kanban';
-  onViewChange: (view: 'grid' | 'kanban') => void;
+  currentTab: 'contratos_vigentes' | 'processos';
+  onTabChange: (tab: 'contratos_vigentes' | 'processos') => void;
+  currentProcessView: 'grid' | 'kanban';
+  onProcessViewChange: (view: 'grid' | 'kanban') => void;
   onOpenNovoProcesso: () => void;
   onOpenUsuarios: () => void;
+  contratosCount: number;
+  processosCount: number;
 }
 
 export const Header: React.FC<HeaderProps> = ({
-  currentView,
-  onViewChange,
+  currentTab,
+  onTabChange,
+  currentProcessView,
+  onProcessViewChange,
   onOpenNovoProcesso,
-  onOpenUsuarios
+  onOpenUsuarios,
+  contratosCount,
+  processosCount
 }) => {
   const {
     usuario,
-    firebaseUser,
     isMaster,
     isApoio,
-    isGerente,
     isAtivo,
-    loginComGoogle,
     logout,
     simularPerfil,
     modoSimulado,
@@ -59,84 +66,128 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <header className="sticky top-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 shadow-xs">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3.5">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-          {/* Logo & Title */}
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-linear-to-br from-blue-700 to-blue-900 text-white flex items-center justify-center shadow-md shadow-blue-500/20 shrink-0">
-              <Building2 className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-slate-100 tracking-tight leading-tight">
-                  Controle de Contratos GAD
-                </h1>
-                <span className="hidden sm:inline-block px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300">
-                  COMPESA
-                </span>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          
+          {/* Logo & Main Tabs */}
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-linear-to-br from-blue-700 to-blue-900 text-white flex items-center justify-center shadow-md shadow-blue-500/20 shrink-0">
+                <Building2 className="w-5 h-5" />
               </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                Gerência Administrativa e de Suporte • CGF • CSG
-              </p>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-slate-100 tracking-tight leading-tight">
+                    Controle de Contratos GAD
+                  </h1>
+                  <span className="hidden sm:inline-block px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300">
+                    COMPESA
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+                  Gerência Administrativa e de Suporte • CGF • CSG
+                </p>
+              </div>
             </div>
+
+            {/* Primary Navigation Tabs (Contratos Vigentes vs Processos) */}
+            <nav className="flex items-center p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold">
+              <button
+                id="tab-contratos-vigentes"
+                onClick={() => onTabChange('contratos_vigentes')}
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg transition-all cursor-pointer ${
+                  currentTab === 'contratos_vigentes'
+                    ? 'bg-white dark:bg-slate-900 text-blue-700 dark:text-blue-400 shadow-xs ring-1 ring-slate-200 dark:ring-slate-700'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>Contratos Vigentes</span>
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300 font-mono">
+                  {contratosCount}
+                </span>
+              </button>
+
+              <button
+                id="tab-processos"
+                onClick={() => onTabChange('processos')}
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg transition-all cursor-pointer ${
+                  currentTab === 'processos'
+                    ? 'bg-white dark:bg-slate-900 text-blue-700 dark:text-blue-400 shadow-xs ring-1 ring-slate-200 dark:ring-slate-700'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span>Processos & Fluxos</span>
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300 font-mono">
+                  {processosCount}
+                </span>
+              </button>
+            </nav>
           </div>
 
-          {/* Action and User Controls */}
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-            {/* View Switcher: Grid vs Kanban */}
-            <div className="flex items-center p-1 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-xs">
-              <button
-                onClick={() => onViewChange('grid')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold transition-all ${
-                  currentView === 'grid'
-                    ? 'bg-white dark:bg-slate-900 text-blue-700 dark:text-blue-400 shadow-xs'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-                }`}
-              >
-                <LayoutGrid className="w-3.5 h-3.5" />
-                <span>Painel</span>
-              </button>
-              <button
-                onClick={() => onViewChange('kanban')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold transition-all ${
-                  currentView === 'kanban'
-                    ? 'bg-white dark:bg-slate-900 text-blue-700 dark:text-blue-400 shadow-xs'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-                }`}
-              >
-                <Kanban className="w-3.5 h-3.5" />
-                <span>Kanban</span>
-              </button>
-            </div>
+          {/* Right Action and User Controls */}
+          <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+            
+            {/* View Switcher (Grid vs Kanban) - Only active when in 'processos' tab */}
+            {currentTab === 'processos' && (
+              <div className="flex items-center p-1 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-xs">
+                <button
+                  onClick={() => onProcessViewChange('grid')}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-semibold transition-all cursor-pointer ${
+                    currentProcessView === 'grid'
+                      ? 'bg-white dark:bg-slate-900 text-blue-700 dark:text-blue-400 shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                  }`}
+                >
+                  <LayoutGrid className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Painel</span>
+                </button>
+                <button
+                  onClick={() => onProcessViewChange('kanban')}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-semibold transition-all cursor-pointer ${
+                    currentProcessView === 'kanban'
+                      ? 'bg-white dark:bg-slate-900 text-blue-700 dark:text-blue-400 shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                  }`}
+                >
+                  <Kanban className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Kanban</span>
+                </button>
+              </div>
+            )}
 
             {/* Novo Processo button (for active users) */}
             {isAtivo && (
               <button
+                id="btn-header-novo-processo"
                 onClick={onOpenNovoProcesso}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-sm hover:shadow-md transition-all"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold shadow-xs hover:shadow transition-all cursor-pointer"
               >
                 <FilePlus2 className="w-4 h-4" />
-                <span>Novo Contrato / Processo</span>
+                <span>Novo Processo</span>
               </button>
             )}
 
             {/* Gestão de Usuários button (for MASTER) */}
             {isMaster && (
               <button
+                id="btn-header-usuarios-perfis"
                 onClick={onOpenUsuarios}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/70 text-purple-700 dark:text-purple-300 text-xs font-bold border border-purple-200 dark:border-purple-800 shadow-xs transition-colors"
-                title="Gerenciar usuários e aprovações de acesso"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/70 text-purple-800 dark:text-purple-300 text-xs font-bold border border-purple-200 dark:border-purple-800 shadow-xs transition-colors cursor-pointer"
+                title="Gerenciar usuários e permissões de acesso"
               >
-                <Users className="w-4 h-4" />
-                <span className="hidden sm:inline">Usuários & Perfis</span>
+                <Users className="w-4 h-4 text-purple-600" />
+                <span className="hidden sm:inline">Usuários</span>
               </button>
             )}
 
             {/* Demo Role Switcher Dropdown */}
             <div className="relative">
               <button
+                id="btn-header-perfil-demo"
                 onClick={() => setIsDemoDropdownOpen(!isDemoDropdownOpen)}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 text-slate-700 dark:text-slate-300 text-xs font-semibold transition-colors"
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 text-slate-700 dark:text-slate-300 text-xs font-semibold transition-colors cursor-pointer"
                 title="Testar diferentes perfis de usuário"
               >
                 <Sparkles className="w-3.5 h-3.5 text-amber-500" />
@@ -154,17 +205,17 @@ export const Header: React.FC<HeaderProps> = ({
                       simularPerfil('MASTER');
                       setIsDemoDropdownOpen(false);
                     }}
-                    className="w-full text-left px-3 py-2 rounded-lg hover:bg-purple-50 dark:hover:bg-purple-950/50 text-purple-700 dark:text-purple-300 font-semibold flex items-center justify-between"
+                    className="w-full text-left px-3 py-2 rounded-lg hover:bg-purple-50 dark:hover:bg-purple-950/50 text-purple-700 dark:text-purple-300 font-semibold flex items-center justify-between cursor-pointer"
                   >
                     <span>MASTER (Total)</span>
-                    <span className="text-[10px] bg-purple-100 dark:bg-purple-900 px-1.5 py-0.5 rounded">cgf.compesa</span>
+                    <span className="text-[10px] bg-purple-100 dark:bg-purple-900 px-1.5 py-0.5 rounded font-mono">cgf.compesa</span>
                   </button>
                   <button
                     onClick={() => {
                       simularPerfil('APOIO CONTRATOS');
                       setIsDemoDropdownOpen(false);
                     }}
-                    className="w-full text-left px-3 py-2 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-950/50 text-blue-700 dark:text-blue-300 font-semibold"
+                    className="w-full text-left px-3 py-2 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-950/50 text-blue-700 dark:text-blue-300 font-semibold cursor-pointer"
                   >
                     APOIO CONTRATOS
                   </button>
@@ -173,7 +224,7 @@ export const Header: React.FC<HeaderProps> = ({
                       simularPerfil('GERENTE');
                       setIsDemoDropdownOpen(false);
                     }}
-                    className="w-full text-left px-3 py-2 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 font-semibold"
+                    className="w-full text-left px-3 py-2 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 font-semibold cursor-pointer"
                   >
                     GERENTE
                   </button>
@@ -182,7 +233,7 @@ export const Header: React.FC<HeaderProps> = ({
                       simularPerfil('PENDENTE');
                       setIsDemoDropdownOpen(false);
                     }}
-                    className="w-full text-left px-3 py-2 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-950/50 text-amber-700 dark:text-amber-300 font-semibold"
+                    className="w-full text-left px-3 py-2 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-950/50 text-amber-700 dark:text-amber-300 font-semibold cursor-pointer"
                   >
                     PENDENTE (Aguardando)
                   </button>
@@ -194,7 +245,7 @@ export const Header: React.FC<HeaderProps> = ({
                           restaurarUsuarioReal();
                           setIsDemoDropdownOpen(false);
                         }}
-                        className="w-full text-left px-3 py-1.5 rounded-lg text-slate-500 hover:text-slate-800 text-[11px]"
+                        className="w-full text-left px-3 py-1.5 rounded-lg text-slate-500 hover:text-slate-800 text-[11px] cursor-pointer"
                       >
                         Restaurar Usuário Google Real
                       </button>
@@ -228,23 +279,17 @@ export const Header: React.FC<HeaderProps> = ({
                 </div>
 
                 <button
+                  id="btn-header-logout"
                   onClick={logout}
-                  className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg transition-colors"
+                  className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg transition-colors cursor-pointer"
                   title="Sair do sistema"
                 >
                   <LogOut className="w-4 h-4" />
                 </button>
               </div>
-            ) : (
-              <button
-                onClick={loginComGoogle}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-slate-900 text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 text-xs font-bold shadow-xs transition-colors"
-              >
-                <LogIn className="w-3.5 h-3.5" />
-                <span>Entrar com Google</span>
-              </button>
-            )}
+            ) : null}
           </div>
+
         </div>
       </div>
     </header>

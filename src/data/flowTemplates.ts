@@ -6,34 +6,31 @@ export interface TemplateEtapa {
   descricaoCondicional?: string;
 }
 
+const FLUXO_LICITACAO_NOVO_CONTRATO: TemplateEtapa[] = [
+  { nome: 'Levantamento de quantitativos' },
+  { nome: 'Elaborar planilha de estimativa de custos' },
+  { nome: 'Cotação de itens' },
+  { nome: 'Elaborar termo de referência' },
+  { nome: 'Aprovação DGC' },
+  { nome: 'PA' },
+  { nome: 'Análise GCL' },
+  { nome: 'Publicação e recebimento de propostas' },
+  { nome: 'Diligências' },
+  { nome: 'Julgamento de Propostas' },
+  { nome: 'Homologação' },
+  { nome: 'Elaboração de contrato (GEC)' },
+  { nome: 'Assinatura de contrato' },
+  { nome: 'Nomeação de gestor administrativo' },
+  { nome: 'Assinatura de ordem de serviço' },
+  { nome: 'Apólice (Contratada)' },
+  { nome: 'Elaboração de planilha de implantação Alpha' },
+  { nome: 'Implantação no Alpha (CCR)' },
+  { nome: 'Pré-contabilização' },
+];
+
 export const TEMPLATES_FLUXOS: Record<TipoAcao, TemplateEtapa[]> = {
-  'LICITAÇÃO / NOVO CONTRATO com Mão de Obra': [
-    { nome: 'Levantamento de quantitativos' },
-    { nome: 'Elaborar planilha de estimativa de custos' },
-    { nome: 'Cotação de itens' },
-    { nome: 'Elaborar termo de referência' },
-    { nome: 'Termo de segurança do trabalho (CST)' },
-    { nome: 'Parecer peric./insal. (CST)' },
-    { nome: 'Análise/Parecer CCR' },
-    { nome: 'Aprovação DGC' },
-    { nome: 'PA' },
-    { nome: 'Análise GCL' },
-    { nome: 'Publicação e recebimento de propostas' },
-    { nome: 'Diligências' },
-    { nome: 'Julgamento de Propostas' },
-    { nome: 'Homologação' },
-    { nome: 'Elaboração de contrato (GEC)' },
-    { nome: 'Assinatura de contrato' },
-    { nome: 'Nomeação de gestor administrativo' },
-    { nome: 'Nomeação de gestores fiscais' },
-    { nome: 'Assinatura de ordem de serviço' },
-    { nome: 'Apólice (Contratada)' },
-    { nome: 'Entrega de EPIs, fardamentos, veículos, etc.' },
-    { nome: 'Elaboração de planilha de implantação Alpha' },
-    { nome: 'Elaboração de planilha de medição Alpha' },
-    { nome: 'Implantação no Alpha (CCR)' },
-    { nome: 'Pré-contabilização' },
-  ],
+  'LICITAÇÃO / NOVO CONTRATO': FLUXO_LICITACAO_NOVO_CONTRATO,
+  'LICITAÇÃO / NOVO CONTRATO com Mão de Obra': FLUXO_LICITACAO_NOVO_CONTRATO,
   'REAJUSTE RETROATIVO EM CONTRATO': [
     { nome: 'Carta de solicitação (Contratada)' },
     { nome: 'Cálculo de reajuste retroativo (CCR)' },
@@ -74,7 +71,7 @@ export const LOTACOES_DISPONIVEIS = [
 ] as const;
 
 export const TIPOS_ACAO_DISPONIVEIS: TipoAcao[] = [
-  'LICITAÇÃO / NOVO CONTRATO com Mão de Obra',
+  'LICITAÇÃO / NOVO CONTRATO',
   'REAJUSTE RETROATIVO EM CONTRATO',
   'ADITIVO (RENOVAÇÃO/SUPRESSÃO/ACRÉSCIMO) EM CONTRATO',
 ];

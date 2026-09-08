@@ -1,65 +1,37 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Helper function to check if user is authenticated
-    function isAuthenticated() {
-      return request.auth != null;
+    // Contratos Vigentes da GAD (importados da planilha)
+    match /contratosVigentes/{contratoId} {
+      allow read, write: if true;
     }
 
-    // Helper function to check if user is MASTER
-    function isMaster() {
-      return isAuthenticated() && (
-        request.auth.token.email == 'cgf.compesa@gmail.com' ||
-        get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.perfil == 'MASTER'
-      );
-    }
-
-    // Helper function to check if user is active
-    function isActiveUser() {
-      return isAuthenticated() && (
-        isMaster() ||
-        get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.status == 'ativo'
-      );
-    }
-
-    // Usuarios collection
-    match /usuarios/{userId} {
-      allow read: if isAuthenticated();
-      // Allow user to create/update their own profile on first login, or MASTER to update any
-      allow create: if isAuthenticated() && (request.auth.uid == userId || isMaster());
-      allow update: if isMaster() || (request.auth.uid == userId && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['perfil', 'status']));
-      allow delete: if isMaster();
-    }
-
-    // Processos collection
+    // Processos de contratos e etapas da GAD / COMPESA
     match /processos/{processoId} {
-      allow read: if isAuthenticated();
-      allow create, update: if isAuthenticated();
-      allow delete: if isMaster() || (isAuthenticated() && get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.perfil in ['APOIO CONTRATOS', 'GERENTE']);
+      allow read, write: if true;
 
       match /etapas/{etapaId} {
-        allow read: if isAuthenticated();
-        allow write: if isAuthenticated();
+        allow read, write: if true;
       }
 
       match /logs/{logId} {
-        allow read: if isAuthenticated();
-        // Immutability for logs: allow create, reject update and delete
-        allow create: if isAuthenticated();
-        allow update, delete: if false;
+        allow read, write: if true;
       }
+    }
+
+    // Gestao de usuarios e perfis
+    match /usuarios/{userId} {
+      allow read, write: if true;
     }
 
     // Auditoria geral
     match /auditoria_geral/{auditId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update, delete: if false;
+      allow read, write: if true;
     }
 
-    // Default fallback for authenticated
+    // Regra fallback
     match /{document=**} {
-      allow read, write: if isAuthenticated();
+      allow read, write: if true;
     }
   }
 }

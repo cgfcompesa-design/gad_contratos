@@ -22,7 +22,8 @@ import {
   subscribeLogs,
   editarProcesso,
   excluirProcesso,
-  formatarDataHora
+  formatarDataHora,
+  converterProcessoEmContratoVigente
 } from '../services/firestoreService';
 import { EtapasChecklist } from './EtapasChecklist';
 import { GanttChart } from './GanttChart';
@@ -53,6 +54,8 @@ export const ProcessoDetalhes: React.FC<ProcessoDetalhesProps> = ({
   const [editEmpresa, setEditEmpresa] = useState(processo.empresaContratada || '');
   const [editValor, setEditValor] = useState(processo.valorEstimado ? String(processo.valorEstimado) : '');
   const [savingInfo, setSavingInfo] = useState(false);
+  const [isConverting, setIsConverting] = useState(false);
+  const [conversionSuccess, setConversionSuccess] = useState<string | null>(null);
 
   // Permissions
   const isMaster = usuarioAtual.perfil === 'MASTER' || usuarioAtual.email.toLowerCase() === 'cgf.compesa@gmail.com';
@@ -109,6 +112,19 @@ export const ProcessoDetalhes: React.FC<ProcessoDetalhesProps> = ({
       onClose();
     } catch (err) {
       console.error('Erro ao excluir processo:', err);
+    }
+  };
+
+  const handleConverterContrato = async () => {
+    try {
+      setIsConverting(true);
+      const novoContratoId = await converterProcessoEmContratoVigente(processo, usuarioAtual);
+      setConversionSuccess(`Contrato Vigente cadastrado com sucesso na base oficial da GAD! (ID: ${novoContratoId})`);
+    } catch (err: any) {
+      console.error('Erro ao converter processo em contrato:', err);
+      alert('Erro ao converter processo em contrato vigente.');
+    } finally {
+      setIsConverting(false);
     }
   };
 
@@ -213,6 +229,33 @@ export const ProcessoDetalhes: React.FC<ProcessoDetalhesProps> = ({
               />
             </div>
           </div>
+
+          {/* Prompt Section 5: Se for Licitação concluída, oferecer 'Cadastrar como Contrato Vigente' */}
+          {processo.tipoAcao.includes('LICITAÇÃO') && (progresso === 100 || processo.statusGeral === 'concluido') && (
+            <div className="mt-3 p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-300 dark:border-emerald-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in">
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                  <span className="font-extrabold text-xs text-emerald-900 dark:text-emerald-200">
+                    Processo de Licitação Concluído / Homologado!
+                  </span>
+                </div>
+                <p className="text-[11px] text-emerald-700 dark:text-emerald-300">
+                  {conversionSuccess || 'Todas as 19 etapas foram concluídas. Deseja cadastrar oficialmente como Contrato Vigente na base da GAD?'}
+                </p>
+              </div>
+
+              {!conversionSuccess && (
+                <button
+                  onClick={handleConverterContrato}
+                  disabled={isConverting}
+                  className="px-4 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs shadow-xs hover:shadow transition-all shrink-0 cursor-pointer disabled:opacity-60"
+                >
+                  {isConverting ? 'Cadastrando Contrato...' : 'Cadastrar como Contrato Vigente'}
+                </button>
+              )}
+            </div>
+          )}
 
           {/* Tabs Navigation */}
           <div className="flex items-center gap-2 mt-5 border-b border-slate-200 dark:border-slate-700 -mb-4 pb-0 overflow-x-auto text-xs font-semibold">

@@ -19,9 +19,32 @@ export type LotacaoDestino =
   | 'CSG — Coordenação de Serviços Gerais';
 
 export type TipoAcao =
+  | 'LICITAÇÃO / NOVO CONTRATO'
   | 'LICITAÇÃO / NOVO CONTRATO com Mão de Obra'
   | 'REAJUSTE RETROATIVO EM CONTRATO'
   | 'ADITIVO (RENOVAÇÃO/SUPRESSÃO/ACRÉSCIMO) EM CONTRATO';
+
+export type StatusPrazo = 'venceu' | 'vence_hoje' | 'menos_4_meses' | 'mais_4_meses';
+
+export interface ContratoVigente {
+  id: string;
+  numero: number;
+  gestor: string;
+  numeroContrato: string;
+  projeto: string;
+  empresa: string;
+  objeto: string;
+  valorAnual: number;
+  dataOrdemServico?: string;
+  dataInicialExecucao?: string;
+  dataFinalExecucao?: string;
+  dataInicialVigencia?: string;
+  dataFinalVigencia?: string;
+  statusPrazo?: StatusPrazo;
+  situacaoManual?: string;
+  criadoEm: string;
+  atualizadoEm: string;
+}
 
 export type StatusGeralProcesso =
   | 'nao_iniciado'
@@ -79,6 +102,9 @@ export interface ProcessoContrato {
   lotacaoDestino: LotacaoDestino;
   tipoAcao: TipoAcao;
   descricaoObjeto: string;
+  contratoVigenteId?: string | null;
+  dataReferencia?: string | null;
+  proximaEtapaPendenteNome?: string | null;
   empresaContratada?: string;
   valorEstimado?: number;
   statusGeral: StatusGeralProcesso;
