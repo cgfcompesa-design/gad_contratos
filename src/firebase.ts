@@ -1,7 +1,16 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
-import { getFirestore, Firestore } from 'firebase/firestore';
-import firebaseConfig from '../firebase-applet-config.json';
+import { getFirestore } from 'firebase/firestore';
+
+export const firebaseConfig = {
+  apiKey: "AIzaSyDA--SkTQq52431mLnwBAD7U2nnW0LQrj8",
+  authDomain: "gadcontratos.firebaseapp.com",
+  projectId: "gadcontratos",
+  storageBucket: "gadcontratos.firebasestorage.app",
+  messagingSenderId: "341465265899",
+  appId: "1:341465265899:web:ccee0092fe18f525e530ae",
+  measurementId: "G-NQNJMMFZYH"
+};
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
@@ -11,17 +20,5 @@ googleProvider.setCustomParameters({
   prompt: 'select_account'
 });
 
-// Configure Firestore with database ID if specified
-let firestoreDb: Firestore;
-try {
-  if (firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabaseId !== '(default)') {
-    firestoreDb = getFirestore(app, firebaseConfig.firestoreDatabaseId);
-  } else {
-    firestoreDb = getFirestore(app);
-  }
-} catch {
-  firestoreDb = getFirestore(app);
-}
-
-export const db = firestoreDb;
+export const db = getFirestore(app);
 export default app;

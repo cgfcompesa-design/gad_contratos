@@ -28,6 +28,7 @@ import { ProcessoDetalhes } from './components/ProcessoDetalhes';
 import { NovoProcessoModal } from './components/NovoProcessoModal';
 import { UsuariosModal } from './components/UsuariosModal';
 import { AguardandoAprovacao } from './components/AguardandoAprovacao';
+import { CompesaLogo } from './components/CompesaLogo';
 import {
   Search,
   Filter,
@@ -459,10 +460,10 @@ function AppContent() {
   if (authLoading) {
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center p-4">
-        <div className="w-12 h-12 rounded-2xl bg-blue-700 text-white flex items-center justify-center shadow-lg mb-4 animate-pulse">
-          <Building2 className="w-6 h-6" />
+        <div className="mb-4">
+          <CompesaLogo size="lg" variant="symbol" />
         </div>
-        <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+        <p className="text-sm font-semibold text-slate-700 dark:text-slate-300 animate-pulse">
           Carregando Sistema de Controle de Contratos GAD...
         </p>
       </div>

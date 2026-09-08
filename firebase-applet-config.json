@@ -1,12 +1,9 @@
 {
-  "projectId": "elated-ripsaw-bzp2g",
-  "appId": "1:791133489144:web:5e163c53063d861e2ff80d",
-  "apiKey": "AIzaSyA6tN-BLpvTEmqUP34S82wDkcat7VwXapo",
-  "authDomain": "elated-ripsaw-bzp2g.firebaseapp.com",
-  "firestoreDatabaseId": "ai-studio-4569019b-4ede-436b-99e3-b24520dd3fbd",
-  "storageBucket": "elated-ripsaw-bzp2g.firebasestorage.app",
-  "messagingSenderId": "791133489144",
-  "measurementId": "",
-  "oAuthClientId": "791133489144-35tfgva41b7j4n8honacv988sjdef3mh.apps.googleusercontent.com",
-  "recaptchaSiteKey": ""
+  "projectId": "gadcontratos",
+  "appId": "1:341465265899:web:ccee0092fe18f525e530ae",
+  "apiKey": "AIzaSyDA--SkTQq52431mLnwBAD7U2nnW0LQrj8",
+  "authDomain": "gadcontratos.firebaseapp.com",
+  "storageBucket": "gadcontratos.firebasestorage.app",
+  "messagingSenderId": "341465265899",
+  "measurementId": "G-NQNJMMFZYH"
 }

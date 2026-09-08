@@ -16,6 +16,7 @@ import {
   CheckCircle2
 } from 'lucide-react';
 import { PerfilUsuario } from '../types';
+import { CompesaLogo } from './CompesaLogo';
 
 interface HeaderProps {
   currentTab: 'contratos_vigentes' | 'processos';
@@ -72,8 +73,8 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Logo & Main Tabs */}
           <div className="flex flex-wrap items-center gap-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-linear-to-br from-blue-700 to-blue-900 text-white flex items-center justify-center shadow-md shadow-blue-500/20 shrink-0">
-                <Building2 className="w-5 h-5" />
+              <div className="p-1 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xs shrink-0 flex items-center justify-center">
+                <CompesaLogo size="sm" variant="symbol" />
               </div>
               <div>
                 <div className="flex items-center gap-2">

@@ -1,21 +1,17 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import {
-  Building2,
   ShieldCheck,
-  Sparkles,
-  ArrowRight,
   AlertCircle,
   FileText,
   Clock,
   BarChart3,
-  CheckCircle2,
-  UserCheck
+  CheckCircle2
 } from 'lucide-react';
-import { PerfilUsuario } from '../types';
+import { CompesaLogo } from './CompesaLogo';
 
 export const LoginScreen: React.FC = () => {
-  const { loginComGoogle, simularPerfil } = useAuth();
+  const { loginComGoogle } = useAuth();
   const [carregandoGoogle, setCarregandoGoogle] = useState(false);
   const [erroLogin, setErroLogin] = useState<string | null>(null);
 
@@ -29,28 +25,24 @@ export const LoginScreen: React.FC = () => {
       // If popup was blocked or iframe restriction
       setErroLogin(
         err?.message?.includes('popup')
-          ? 'Janela de autenticação foi bloqueada pelo navegador. Permita pop-ups ou use o acesso rápido abaixo para testar.'
-          : 'Não foi possível completar o login com Google no momento. Use as credenciais de teste abaixo.'
+          ? 'Janela de autenticação foi bloqueada pelo navegador. Permita pop-ups para continuar com o login Google.'
+          : 'Não foi possível completar o login com Google no momento. Verifique sua conexão e tente novamente.'
       );
     } finally {
       setCarregandoGoogle(false);
     }
   };
 
-  const handleSimular = (perfil: PerfilUsuario) => {
-    simularPerfil(perfil);
-  };
-
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col justify-between text-slate-800 dark:text-slate-200">
       {/* Top institutional strip */}
-      <div className="w-full bg-blue-900 text-white text-xs py-2 px-4 shadow-xs">
+      <div className="w-full bg-[#0a3d7a] text-white text-xs py-2.5 px-4 shadow-xs">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-2 font-semibold tracking-wide">
-            <Building2 className="w-4 h-4 text-blue-300" />
+          <div className="flex items-center gap-2.5 font-semibold tracking-wide">
+            <CompesaLogo size="xs" variant="symbol" />
             <span>COMPESA — Companhia Pernambucana de Saneamento</span>
           </div>
-          <span className="text-blue-200 text-[11px] hidden sm:inline">
+          <span className="text-blue-100 text-[11px] hidden sm:inline font-medium">
             Sistema Integrado de Gestão Administrativa
           </span>
         </div>
@@ -62,7 +54,10 @@ export const LoginScreen: React.FC = () => {
           
           {/* Left Hero / Context (Visible on desktop) */}
           <div className="lg:col-span-6 space-y-6">
-            <div className="space-y-3">
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <CompesaLogo size="lg" variant="full" />
+              </div>
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-100 dark:bg-blue-950/60 text-blue-800 dark:text-blue-300 text-xs font-bold tracking-wide border border-blue-200 dark:border-blue-900">
                 <ShieldCheck className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
                 <span>GAD • CGF • CSG</span>
@@ -124,16 +119,18 @@ export const LoginScreen: React.FC = () => {
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 sm:p-8 shadow-xl shadow-slate-200/50 dark:shadow-none space-y-6">
               
               {/* Card Header */}
-              <div className="text-center space-y-2">
-                <div className="w-14 h-14 mx-auto rounded-2xl bg-blue-800 text-white flex items-center justify-center shadow-lg shadow-blue-800/25">
-                  <Building2 className="w-7 h-7" />
+              <div className="text-center space-y-3">
+                <div className="w-16 h-16 mx-auto rounded-2xl bg-white dark:bg-slate-800 p-2 flex items-center justify-center shadow-md border border-slate-100 dark:border-slate-700">
+                  <CompesaLogo size="md" variant="symbol" />
                 </div>
-                <h2 className="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-                  Acesse sua conta institucional
-                </h2>
-                <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
-                  A autenticação é realizada com sua conta Google corporativa. O acesso a rotas internas requer login ativo.
-                </p>
+                <div>
+                  <h2 className="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+                    Acesso Institucional COMPESA
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto mt-1">
+                    Entre com sua conta Google corporativa para acessar o painel de contratos e fluxos da GAD.
+                  </p>
+                </div>
               </div>
 
               {/* Error notice if any */}
@@ -145,7 +142,7 @@ export const LoginScreen: React.FC = () => {
               )}
 
               {/* Main Google Login Button */}
-              <div className="space-y-3">
+              <div className="space-y-3 pt-2">
                 <button
                   id="btn-login-google"
                   onClick={handleGoogleLogin}
@@ -174,98 +171,12 @@ export const LoginScreen: React.FC = () => {
                       />
                     </svg>
                   )}
-                  <span>{carregandoGoogle ? 'Conectando ao Google...' : 'Entrar com Google'}</span>
+                  <span>{carregandoGoogle ? 'Conectando ao Google...' : 'Entrar com Conta Google'}</span>
                 </button>
 
                 <p className="text-[11px] text-center text-slate-400 dark:text-slate-500">
-                  Primeiro acesso é registrado como <strong>PENDENTE</strong> até liberação por MASTER (cgf.compesa@gmail.com).
+                  O primeiro acesso é cadastrado como <strong>PENDENTE</strong> e aguarda aprovação pelo gestor MASTER.
                 </p>
-              </div>
-
-              {/* Fast Evaluation / Demonstration Mode Divider */}
-              <div className="relative flex py-1 items-center">
-                <div className="grow border-t border-slate-200 dark:border-slate-800"></div>
-                <span className="shrink mx-3 text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 bg-white dark:bg-slate-900 px-2">
-                  Ambiente de Demonstração & Avaliação
-                </span>
-                <div className="grow border-t border-slate-200 dark:border-slate-800"></div>
-              </div>
-
-              {/* Quick simulation buttons for evaluator convenience */}
-              <div className="space-y-2">
-                <p className="text-xs text-slate-600 dark:text-slate-400 font-medium">
-                  Selecione um perfil pré-configurado para testar o sistema imediatamente:
-                </p>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <button
-                    id="btn-login-demo-master"
-                    onClick={() => handleSimular('MASTER')}
-                    className="flex items-center justify-between p-2.5 rounded-xl border border-purple-200 dark:border-purple-900 bg-purple-50/70 dark:bg-purple-950/40 hover:bg-purple-100 text-purple-900 dark:text-purple-200 text-xs font-semibold transition-all text-left"
-                  >
-                    <div>
-                      <div className="font-extrabold flex items-center gap-1">
-                        <Sparkles className="w-3.5 h-3.5 text-purple-600" />
-                        <span>MASTER</span>
-                      </div>
-                      <span className="text-[10px] text-purple-700 dark:text-purple-300 font-normal">
-                        cgf.compesa@gmail.com
-                      </span>
-                    </div>
-                    <ArrowRight className="w-3.5 h-3.5 text-purple-600 shrink-0" />
-                  </button>
-
-                  <button
-                    id="btn-login-demo-apoio"
-                    onClick={() => handleSimular('APOIO CONTRATOS')}
-                    className="flex items-center justify-between p-2.5 rounded-xl border border-blue-200 dark:border-blue-900 bg-blue-50/70 dark:bg-blue-950/40 hover:bg-blue-100 text-blue-900 dark:text-blue-200 text-xs font-semibold transition-all text-left"
-                  >
-                    <div>
-                      <div className="font-extrabold flex items-center gap-1">
-                        <UserCheck className="w-3.5 h-3.5 text-blue-600" />
-                        <span>APOIO CONTRATOS</span>
-                      </div>
-                      <span className="text-[10px] text-blue-700 dark:text-blue-300 font-normal">
-                        apoio.contratos@compesa.com.br
-                      </span>
-                    </div>
-                    <ArrowRight className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                  </button>
-
-                  <button
-                    id="btn-login-demo-gerente"
-                    onClick={() => handleSimular('GERENTE')}
-                    className="flex items-center justify-between p-2.5 rounded-xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50/70 dark:bg-emerald-950/40 hover:bg-emerald-100 text-emerald-900 dark:text-emerald-200 text-xs font-semibold transition-all text-left"
-                  >
-                    <div>
-                      <div className="font-extrabold flex items-center gap-1">
-                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>GERENTE</span>
-                      </div>
-                      <span className="text-[10px] text-emerald-700 dark:text-emerald-300 font-normal">
-                        gerente.gad@compesa.com.br
-                      </span>
-                    </div>
-                    <ArrowRight className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                  </button>
-
-                  <button
-                    id="btn-login-demo-pendente"
-                    onClick={() => handleSimular('PENDENTE')}
-                    className="flex items-center justify-between p-2.5 rounded-xl border border-amber-200 dark:border-amber-900 bg-amber-50/70 dark:bg-amber-950/40 hover:bg-amber-100 text-amber-900 dark:text-amber-200 text-xs font-semibold transition-all text-left"
-                  >
-                    <div>
-                      <div className="font-extrabold flex items-center gap-1">
-                        <Clock className="w-3.5 h-3.5 text-amber-600" />
-                        <span>PENDENTE</span>
-                      </div>
-                      <span className="text-[10px] text-amber-700 dark:text-amber-300 font-normal">
-                        Aguardando aprovação
-                      </span>
-                    </div>
-                    <ArrowRight className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                  </button>
-                </div>
               </div>
 
             </div>
@@ -275,7 +186,7 @@ export const LoginScreen: React.FC = () => {
 
       {/* Footer */}
       <footer className="py-4 border-t border-slate-200 dark:border-slate-800 text-center text-xs text-slate-500 dark:text-slate-400">
-        <p>© {new Date().getFullYear()} COMPESA — Gerência Administrativa e de Suporte (GAD). Todos os direitos reservados.</p>
+        <p>© {new Date().getFullYear()} COMPESA — Companhia Pernambucana de Saneamento • GAD</p>
       </footer>
     </div>
   );

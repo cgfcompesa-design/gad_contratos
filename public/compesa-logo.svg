@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 260" fill="none">
+  <!-- COMPESA Official Logo Emblem -->
+  <g transform="translate(30, 20)">
+    <!-- Top Green Arc -->
+    <path d="M 36,100 A 64,64 0 0,1 164,100 L 142,100 A 42,42 0 0,0 58,100 Z" fill="#6db326" />
+    <!-- Bottom Blue Arc -->
+    <path d="M 36,100 A 64,64 0 0,0 164,100 L 142,100 A 42,42 0 0,1 58,100 Z" fill="#0c4ea2" />
+    <!-- Central Water Drop -->
+    <path d="M 100,58 C 100,58 76,94 76,114 A 24,24 0 0,0 124,114 C 124,94 100,58 100,58 Z" fill="#0c4ea2" />
+  </g>
+
+  <!-- Typography compesa -->
+  <g fill="#0c4ea2">
+    <text x="130" y="218" text-anchor="middle" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="44" font-weight="800" letter-spacing="-1.5">compesa</text>
+  </g>
+</svg>
