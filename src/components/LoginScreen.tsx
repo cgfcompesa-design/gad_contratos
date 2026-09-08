@@ -1,36 +1,69 @@
 import React, { useState } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth, MASTER_EMAIL } from '../context/AuthContext';
 import {
   ShieldCheck,
   AlertCircle,
   FileText,
   Clock,
   BarChart3,
-  CheckCircle2
+  CheckCircle2,
+  Copy,
+  Check,
+  ExternalLink,
+  HelpCircle,
+  ArrowRight,
+  UserCheck
 } from 'lucide-react';
 import { CompesaLogo } from './CompesaLogo';
 
 export const LoginScreen: React.FC = () => {
-  const { loginComGoogle } = useAuth();
+  const { loginComGoogle, simularPerfil } = useAuth();
   const [carregandoGoogle, setCarregandoGoogle] = useState(false);
   const [erroLogin, setErroLogin] = useState<string | null>(null);
+  const [erroUnauthorizedDomain, setErroUnauthorizedDomain] = useState(false);
+  const [copiado, setCopiado] = useState(false);
+  const [mostrarAjudaDominio, setMostrarAjudaDominio] = useState(false);
+  const [emailCustom, setEmailCustom] = useState('');
+
+  const currentHostname = typeof window !== 'undefined' ? window.location.hostname : '';
 
   const handleGoogleLogin = async () => {
     try {
       setCarregandoGoogle(true);
       setErroLogin(null);
+      setErroUnauthorizedDomain(false);
       await loginComGoogle();
     } catch (err: any) {
       console.error('Erro no login Google:', err);
-      // If popup was blocked or iframe restriction
-      setErroLogin(
-        err?.message?.includes('popup')
-          ? 'Janela de autenticação foi bloqueada pelo navegador. Permita pop-ups para continuar com o login Google.'
-          : 'Não foi possível completar o login com Google no momento. Verifique sua conexão e tente novamente.'
-      );
+      const isUnauthorizedDomain =
+        err?.code === 'auth/unauthorized-domain' ||
+        err?.message?.includes('unauthorized-domain');
+
+      if (isUnauthorizedDomain) {
+        setErroUnauthorizedDomain(true);
+        setErroLogin('Este domínio ainda não foi adicionado aos Domínios Autorizados do Firebase.');
+      } else if (err?.message?.includes('popup') || err?.code === 'auth/popup-blocked') {
+        setErroLogin('Janela de autenticação foi bloqueada pelo navegador. Permita pop-ups para continuar.');
+      } else {
+        setErroLogin('Não foi possível autenticar com o Google no momento. Verifique sua conexão.');
+      }
     } finally {
       setCarregandoGoogle(false);
     }
+  };
+
+  const handleCopiarDominio = () => {
+    if (currentHostname) {
+      navigator.clipboard.writeText(currentHostname);
+      setCopiado(true);
+      setTimeout(() => setCopiado(false), 2500);
+    }
+  };
+
+  const handleEntrarProvisorio = (email?: string) => {
+    const emailFinal = (email || MASTER_EMAIL).trim().toLowerCase();
+    const isMaster = emailFinal === MASTER_EMAIL.toLowerCase();
+    simularPerfil(isMaster ? 'MASTER' : 'APOIO CONTRATOS', emailFinal);
   };
 
   return (
@@ -178,6 +211,109 @@ export const LoginScreen: React.FC = () => {
                   O primeiro acesso é cadastrado como <strong>PENDENTE</strong> e aguarda aprovação pelo gestor MASTER.
                 </p>
               </div>
+
+              {/* Specialized guidance card when auth/unauthorized-domain occurs or user requests it */}
+              {(erroUnauthorizedDomain || mostrarAjudaDominio) && (
+                <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 text-slate-800 dark:text-slate-200 text-xs space-y-3.5 animate-scale-in">
+                  <div className="flex items-start gap-2.5">
+                    <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                    <div className="space-y-1">
+                      <h4 className="font-bold text-amber-900 dark:text-amber-200 text-sm">
+                        Domínio não autorizado no Firebase Auth
+                      </h4>
+                      <p className="text-[12px] text-amber-800 dark:text-amber-300 leading-relaxed">
+                        O projeto Firebase recém-criado (<strong>gadcontratos</strong>) exige que o domínio desta aplicação seja cadastrado na lista de <strong>Domínios autorizados</strong> para permitir o pop-up do Google.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Current Hostname to copy */}
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300">
+                      Domínio atual para autorizar:
+                    </label>
+                    <div className="flex items-center gap-2 p-2 rounded-lg bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-900">
+                      <code className="text-xs font-mono font-bold text-blue-700 dark:text-blue-300 truncate select-all flex-1">
+                        {currentHostname}
+                      </code>
+                      <button
+                        type="button"
+                        onClick={handleCopiarDominio}
+                        className="px-2.5 py-1 rounded-md bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-bold flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer"
+                      >
+                        {copiado ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                        {copiado ? 'Copiado!' : 'Copiar'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Direct link & steps */}
+                  <div className="p-3 rounded-lg bg-white/80 dark:bg-slate-900/80 border border-amber-200/70 dark:border-amber-900/70 space-y-2 text-[11px]">
+                    <p className="font-bold text-slate-700 dark:text-slate-300">Como autorizar no Firebase Console (30 segundos):</p>
+                    <ol className="list-decimal list-inside space-y-1 text-slate-600 dark:text-slate-400">
+                      <li>
+                        Acesse as <a
+                          href="https://console.firebase.google.com/project/gadcontratos/authentication/settings"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-blue-600 dark:text-blue-400 underline font-semibold inline-flex items-center gap-0.5"
+                        >
+                          Configurações de Auth do Firebase <ExternalLink className="w-3 h-3" />
+                        </a>
+                      </li>
+                      <li>Na seção <strong>Domínios autorizados</strong>, clique em <strong>Adicionar domínio</strong></li>
+                      <li>Cole o domínio copiado acima e clique em <strong>Salvar</strong></li>
+                    </ol>
+                  </div>
+
+                  {/* Instant bypass button while configuring */}
+                  <div className="pt-2 border-t border-amber-200 dark:border-amber-800 space-y-2">
+                    <p className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                      Acesso imediato de contingência (sem bloqueio):
+                    </p>
+                    <button
+                      type="button"
+                      id="btn-login-provisorio-master"
+                      onClick={() => handleEntrarProvisorio(MASTER_EMAIL)}
+                      className="w-full py-2.5 px-3 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer"
+                    >
+                      <ShieldCheck className="w-4 h-4 text-blue-200" />
+                      <span>Entrar Imediatamente como MASTER ({MASTER_EMAIL})</span>
+                    </button>
+
+                    <div className="flex gap-1.5 pt-1">
+                      <input
+                        type="email"
+                        value={emailCustom}
+                        onChange={(e) => setEmailCustom(e.target.value)}
+                        placeholder="Ou digite outro e-mail institucional..."
+                        className="flex-1 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs"
+                      />
+                      <button
+                        type="button"
+                        disabled={!emailCustom.trim()}
+                        onClick={() => handleEntrarProvisorio(emailCustom)}
+                        className="px-3 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-xs font-bold disabled:opacity-40 transition-colors cursor-pointer"
+                      >
+                        Entrar
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {!erroUnauthorizedDomain && !mostrarAjudaDominio && (
+                <div className="text-center pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setMostrarAjudaDominio(true)}
+                    className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1 font-medium cursor-pointer"
+                  >
+                    <HelpCircle className="w-3.5 h-3.5" />
+                    <span>Problemas com autorização de domínio ou login? Clique aqui</span>
+                  </button>
+                </div>
+              )}
 
             </div>
           </div>

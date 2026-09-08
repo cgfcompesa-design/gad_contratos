@@ -34,12 +34,30 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const SESSION_STORAGE_KEY = 'compesa_sessao_ativa';
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [usuario, setUsuario] = useState<Usuario | null>(null);
   const [loading, setLoading] = useState(true);
-  const [modoSimulado, setModoSimulado] = useState(false);
-  const [usuarioSimulado, setUsuarioSimulado] = useState<Usuario | null>(null);
+
+  // Initialize from localStorage if exists
+  const [modoSimulado, setModoSimulado] = useState<boolean>(() => {
+    try {
+      return !!localStorage.getItem(SESSION_STORAGE_KEY);
+    } catch {
+      return false;
+    }
+  });
+
+  const [usuarioSimulado, setUsuarioSimulado] = useState<Usuario | null>(() => {
+    try {
+      const saved = localStorage.getItem(SESSION_STORAGE_KEY);
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentFirebaseUser) => {
@@ -129,6 +147,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = async () => {
     try {
+      try {
+        localStorage.removeItem(SESSION_STORAGE_KEY);
+      } catch (e) {
+        console.error(e);
+      }
       setModoSimulado(false);
       setUsuarioSimulado(null);
       await firebaseSignOut(auth);
@@ -157,11 +180,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       fotoUrl: perfil === 'MASTER' ? 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop&crop=face' : undefined
     };
 
+    try {
+      localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(mockUser));
+    } catch (e) {
+      console.error(e);
+    }
+
     setUsuarioSimulado(mockUser);
     setModoSimulado(true);
   };
 
   const restaurarUsuarioReal = () => {
+    try {
+      localStorage.removeItem(SESSION_STORAGE_KEY);
+    } catch (e) {
+      console.error(e);
+    }
     setModoSimulado(false);
     setUsuarioSimulado(null);
   };
