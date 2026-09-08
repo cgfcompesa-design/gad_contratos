@@ -847,7 +847,10 @@ export async function atualizarUsuarioPerfil(params: {
 }
 
 // 14. Seed default sample data if empty
+let hasSeededOrChecked = false;
 export async function seedExemplosSeVazio(usuarioAtual: Usuario) {
+  if (hasSeededOrChecked) return;
+  hasSeededOrChecked = true;
   try {
     // 1. Seed Contratos Vigentes se a coleção estiver vazia
     const contratosSnap = await getDocs(collection(db, 'contratosVigentes'));

@@ -38,13 +38,43 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const SESSION_STORAGE_KEY = 'compesa_sessao_ativa';
+const AUTH_CACHE_KEY = 'compesa_auth_user_cache';
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
-  const [usuario, setUsuario] = useState<Usuario | null>(null);
-  const [loading, setLoading] = useState(true);
 
-  // Initialize from localStorage if exists
+  // Restore cached session immediately on initial render to prevent login screen flicker on refresh
+  const [usuario, setUsuario] = useState<Usuario | null>(() => {
+    try {
+      const cached = localStorage.getItem(AUTH_CACHE_KEY);
+      if (cached) {
+        const parsed = JSON.parse(cached) as Usuario;
+        if (parsed.email?.toLowerCase().trim() === MASTER_EMAIL.toLowerCase().trim()) {
+          parsed.perfil = 'MASTER';
+          parsed.status = 'ativo';
+        }
+        return parsed;
+      }
+      const sim = localStorage.getItem(SESSION_STORAGE_KEY);
+      if (sim) {
+        return JSON.parse(sim) as Usuario;
+      }
+    } catch {
+      return null;
+    }
+    return null;
+  });
+
+  // If we already have a cached authenticated user, we don't block the UI with loading
+  const [loading, setLoading] = useState<boolean>(() => {
+    try {
+      return !localStorage.getItem(AUTH_CACHE_KEY) && !localStorage.getItem(SESSION_STORAGE_KEY);
+    } catch {
+      return true;
+    }
+  });
+
+  // Initialize simulated mode if exists
   const [modoSimulado, setModoSimulado] = useState<boolean>(() => {
     try {
       return !!localStorage.getItem(SESSION_STORAGE_KEY);
@@ -69,96 +99,83 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     const unsubscribe = onAuthStateChanged(auth, async (currentFirebaseUser) => {
-      setLoading(true);
       if (currentFirebaseUser) {
         setFirebaseUser(currentFirebaseUser);
         const email = (currentFirebaseUser.email || '').toLowerCase().trim();
         const isDefaultMaster = email === MASTER_EMAIL.toLowerCase().trim();
 
+        // 1. Instantly construct user object so UI renders with zero lag
+        const immediateUser: Usuario = {
+          uid: currentFirebaseUser.uid,
+          nome: currentFirebaseUser.displayName || (isDefaultMaster ? 'Gestor CGF / MASTER' : email.split('@')[0]),
+          email: currentFirebaseUser.email || email,
+          fotoUrl: currentFirebaseUser.photoURL || undefined,
+          perfil: isDefaultMaster ? 'MASTER' : 'PENDENTE',
+          status: isDefaultMaster ? 'ativo' : 'pendente',
+          criadoEm: new Date().toISOString()
+        };
+
+        // Update state and persistent cache immediately
+        setUsuario((prev) => {
+          const merged: Usuario = {
+            ...immediateUser,
+            ...(prev && prev.uid === currentFirebaseUser.uid ? prev : {}),
+            perfil: isDefaultMaster ? 'MASTER' : (prev?.perfil || immediateUser.perfil),
+            status: isDefaultMaster ? 'ativo' : (prev?.status || immediateUser.status)
+          };
+          try {
+            localStorage.setItem(AUTH_CACHE_KEY, JSON.stringify(merged));
+          } catch (e) {
+            console.error(e);
+          }
+          return merged;
+        });
+
+        setLoading(false);
+
+        // 2. Non-blocking Firestore background synchronization
         const userRef = doc(db, 'usuarios', currentFirebaseUser.uid);
 
-        // Listen for real-time changes to user profile (e.g. when MASTER approves them)
-        const unsubUserDoc = onSnapshot(userRef, async (docSnap) => {
-          try {
-            if (docSnap.exists()) {
-              const data = docSnap.data() as Usuario;
-              // Always ensure MASTER email maintains MASTER status
-              if (isDefaultMaster) {
-                const masterUser: Usuario = {
-                  ...data,
-                  uid: currentFirebaseUser.uid,
-                  nome: data.nome || currentFirebaseUser.displayName || 'Gestor CGF / MASTER',
-                  email: currentFirebaseUser.email || MASTER_EMAIL,
-                  perfil: 'MASTER',
-                  status: 'ativo'
-                };
-                if (data.perfil !== 'MASTER' || data.status !== 'ativo') {
-                  try {
-                    await setDoc(userRef, masterUser, { merge: true });
-                  } catch (writeErr) {
-                    console.warn('Não foi possível persistir status MASTER no Firestore:', writeErr);
-                  }
-                }
-                setUsuario(masterUser);
-              } else {
-                setUsuario(data);
-              }
-            } else {
-              // First time login
-              const novoUsuario: Usuario = {
-                uid: currentFirebaseUser.uid,
-                nome: currentFirebaseUser.displayName || email.split('@')[0],
-                email: currentFirebaseUser.email || '',
-                fotoUrl: currentFirebaseUser.photoURL || undefined,
-                perfil: isDefaultMaster ? 'MASTER' : 'PENDENTE',
-                status: isDefaultMaster ? 'ativo' : 'pendente',
-                criadoEm: new Date().toISOString()
-              };
+        // Ensure user is written to Firestore without blocking the UI
+        setDoc(userRef, immediateUser, { merge: true }).catch((err) => {
+          console.warn('Background sync usuario Firestore:', err);
+        });
 
-              try {
-                await setDoc(userRef, novoUsuario);
-              } catch (writeErr) {
-                console.warn('Não foi possível gravar novo usuário no Firestore:', writeErr);
-              }
-              setUsuario(novoUsuario);
+        // Real-time listener for profile updates by admin
+        const unsubUserDoc = onSnapshot(userRef, (docSnap) => {
+          if (docSnap.exists()) {
+            const data = docSnap.data() as Usuario;
+            const updated: Usuario = {
+              ...immediateUser,
+              ...data,
+              perfil: isDefaultMaster ? 'MASTER' : data.perfil,
+              status: isDefaultMaster ? 'ativo' : data.status
+            };
+            setUsuario(updated);
+            try {
+              localStorage.setItem(AUTH_CACHE_KEY, JSON.stringify(updated));
+            } catch (e) {
+              console.error(e);
             }
-          } catch (snapshotErr) {
-            console.error('Erro ao processar snapshot de usuário:', snapshotErr);
-            // Fallback safe state
-            setUsuario({
-              uid: currentFirebaseUser.uid,
-              nome: currentFirebaseUser.displayName || email.split('@')[0],
-              email: currentFirebaseUser.email || '',
-              fotoUrl: currentFirebaseUser.photoURL || undefined,
-              perfil: isDefaultMaster ? 'MASTER' : 'PENDENTE',
-              status: isDefaultMaster ? 'ativo' : 'pendente',
-              criadoEm: new Date().toISOString()
-            });
-          } finally {
-            setLoading(false);
           }
         }, (err) => {
-          console.error('Erro ao escutar usuario no Firestore:', err);
-          // Fallback if offline, rules blocked, or database not created yet
-          const fallbackUser: Usuario = {
-            uid: currentFirebaseUser.uid,
-            nome: currentFirebaseUser.displayName || email.split('@')[0],
-            email: currentFirebaseUser.email || '',
-            fotoUrl: currentFirebaseUser.photoURL || undefined,
-            perfil: isDefaultMaster ? 'MASTER' : 'PENDENTE',
-            status: isDefaultMaster ? 'ativo' : 'pendente',
-            criadoEm: new Date().toISOString()
-          };
-          setUsuario(fallbackUser);
-          setLoading(false);
+          console.warn('Aviso listener Firestore usuario:', err);
         });
 
         return () => {
           unsubUserDoc();
         };
       } else {
-        setFirebaseUser(null);
-        setUsuario(null);
+        // Only clear if not in simulated mode or already explicitly logged out
+        const hasSim = localStorage.getItem(SESSION_STORAGE_KEY);
+        if (!hasSim) {
+          const hasCache = localStorage.getItem(AUTH_CACHE_KEY);
+          // If there is no cached user in storage, clear state
+          if (!hasCache) {
+            setFirebaseUser(null);
+            setUsuario(null);
+          }
+        }
         setLoading(false);
       }
     });
@@ -169,7 +186,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const loginComGoogle = async () => {
     try {
       setLoading(true);
-      await signInWithPopup(auth, googleProvider);
+      const res = await signInWithPopup(auth, googleProvider);
+      if (res?.user) {
+        const email = (res.user.email || '').toLowerCase().trim();
+        const isDefaultMaster = email === MASTER_EMAIL.toLowerCase().trim();
+        const immediateUser: Usuario = {
+          uid: res.user.uid,
+          nome: res.user.displayName || (isDefaultMaster ? 'Gestor CGF / MASTER' : email.split('@')[0]),
+          email: res.user.email || email,
+          fotoUrl: res.user.photoURL || undefined,
+          perfil: isDefaultMaster ? 'MASTER' : 'PENDENTE',
+          status: isDefaultMaster ? 'ativo' : 'pendente',
+          criadoEm: new Date().toISOString()
+        };
+        setUsuario(immediateUser);
+        setFirebaseUser(res.user);
+        try {
+          localStorage.setItem(AUTH_CACHE_KEY, JSON.stringify(immediateUser));
+        } catch (e) {
+          console.error(e);
+        }
+      }
     } catch (error) {
       console.error('Erro no login com Google:', error);
       throw error;
@@ -190,16 +227,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = async () => {
     try {
+      // 1. Immediately wipe persistent caches
       try {
+        localStorage.removeItem(AUTH_CACHE_KEY);
         localStorage.removeItem(SESSION_STORAGE_KEY);
+        sessionStorage.clear();
       } catch (e) {
-        console.error(e);
+        console.error('Erro ao limpar storage:', e);
       }
-      setModoSimulado(false);
+
+      // 2. Synchronously clear all state to instantly switch to login screen
+      setUsuario(null);
+      setFirebaseUser(null);
       setUsuarioSimulado(null);
+      setModoSimulado(false);
+      setLoading(false);
+
+      // 3. Sign out of Firebase Auth
       await firebaseSignOut(auth);
     } catch (error) {
       console.error('Erro no logout:', error);
+    } finally {
+      // Ensure UI is fully reset
+      setUsuario(null);
+      setFirebaseUser(null);
+      setLoading(false);
     }
   };
 

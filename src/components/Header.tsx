@@ -281,11 +281,17 @@ export const Header: React.FC<HeaderProps> = ({
 
                 <button
                   id="btn-header-logout"
-                  onClick={logout}
-                  className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg transition-colors cursor-pointer"
-                  title="Sair do sistema"
+                  type="button"
+                  onClick={async (e) => {
+                    e.preventDefault();
+                    await logout();
+                  }}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-rose-200 dark:border-rose-900 bg-rose-50/80 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 text-rose-700 dark:text-rose-300 hover:text-rose-800 text-xs font-bold shadow-2xs transition-all cursor-pointer"
+                  title="Sair do Sistema"
                 >
-                  <LogOut className="w-4 h-4" />
+                  <LogOut className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
+                  <span className="hidden sm:inline">Sair do Sistema</span>
+                  <span className="sm:hidden">Sair</span>
                 </button>
               </div>
             ) : null}

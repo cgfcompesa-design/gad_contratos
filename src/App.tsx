@@ -457,7 +457,7 @@ function AppContent() {
   } = useAuth();
 
   // 1. First screen rule: Login screen if not authenticated
-  if (authLoading) {
+  if (authLoading && !usuario) {
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center p-4">
         <div className="mb-4">
