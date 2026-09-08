@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { ContratoVigente, ProcessoContrato, Usuario, StatusPrazo } from '../types';
+import { ContratoVigente, ProcessoContrato, Usuario, StatusPrazo, GestorResponsavel, EmpresaContratada } from '../types';
 import {
   calcularStatusPrazo,
   formatarStatusPrazoLabel,
@@ -7,7 +7,9 @@ import {
 } from '../data/sampleContratos';
 import {
   criarContratoVigente,
-  importarContratosEmLote
+  importarContratosEmLote,
+  criarGestor,
+  criarEmpresaContratada
 } from '../services/firestoreService';
 import {
   Search,
@@ -25,25 +27,35 @@ import {
   ExternalLink,
   ChevronRight,
   ShieldCheck,
-  Briefcase
+  Briefcase,
+  Users,
+  Settings2
 } from 'lucide-react';
 
 interface ContratosVigentesViewProps {
   contratos: ContratoVigente[];
   processos: ProcessoContrato[];
   usuarioAtual: Usuario;
+  gestores?: GestorResponsavel[];
+  empresas?: EmpresaContratada[];
   onSelecionarContrato: (contrato: ContratoVigente) => void;
   onAbrirProcessoNesteContrato: (contrato: ContratoVigente) => void;
   onNovoContratoLicitacao: () => void;
+  onNavegarParaGestores?: () => void;
+  onNavegarParaEmpresas?: () => void;
 }
 
 export const ContratosVigentesView: React.FC<ContratosVigentesViewProps> = ({
   contratos,
   processos,
   usuarioAtual,
+  gestores = [],
+  empresas = [],
   onSelecionarContrato,
   onAbrirProcessoNesteContrato,
-  onNovoContratoLicitacao
+  onNovoContratoLicitacao,
+  onNavegarParaGestores,
+  onNavegarParaEmpresas
 }) => {
   const isMasterOuApoio = usuarioAtual.perfil === 'MASTER' || usuarioAtual.perfil === 'APOIO CONTRATOS';
 
@@ -70,14 +82,113 @@ export const ContratosVigentesView: React.FC<ContratosVigentesViewProps> = ({
     situacaoManual: ''
   });
 
+  // Lista unificada de gestores para seleção suspensa
+  const listaGestoresOpcoes = useMemo(() => {
+    const mapa = new Map<string, { nome: string; lotacao?: string }>();
+    gestores.forEach((g) => {
+      if (g.nome) mapa.set(g.nome, { nome: g.nome, lotacao: g.lotacao });
+    });
+    contratos.forEach((c) => {
+      if (c.gestor && !mapa.has(c.gestor)) {
+        mapa.set(c.gestor, { nome: c.gestor });
+      }
+    });
+    return Array.from(mapa.values()).sort((a, b) => a.nome.localeCompare(b.nome));
+  }, [gestores, contratos]);
+
+  // Lista unificada de empresas contratadas para seleção suspensa
+  const listaEmpresasOpcoes = useMemo(() => {
+    const mapa = new Map<string, { razaoSocial: string; cnpj?: string }>();
+    empresas.forEach((e) => {
+      if (e.razaoSocial) mapa.set(e.razaoSocial, { razaoSocial: e.razaoSocial, cnpj: e.cnpj });
+    });
+    contratos.forEach((c) => {
+      if (c.empresa && !mapa.has(c.empresa)) {
+        mapa.set(c.empresa, { razaoSocial: c.empresa });
+      }
+    });
+    return Array.from(mapa.values()).sort((a, b) => a.razaoSocial.localeCompare(b.razaoSocial));
+  }, [empresas, contratos]);
+
+  // Modais rápidos para inclusão on-the-fly
+  const [modalRapidoGestor, setModalRapidoGestor] = useState(false);
+  const [nomeRapidoGestor, setNomeRapidoGestor] = useState('');
+  const [lotacaoRapidoGestor, setLotacaoRapidoGestor] = useState('GAD — Gerência Administrativa e de Suporte');
+  const [salvandoRapidoGestor, setSalvandoRapidoGestor] = useState(false);
+
+  const [modalRapidoEmpresa, setModalRapidoEmpresa] = useState(false);
+  const [razaoRapidoEmpresa, setRazaoRapidoEmpresa] = useState('');
+  const [cnpjRapidoEmpresa, setCnpjRapidoEmpresa] = useState('');
+  const [salvandoRapidoEmpresa, setSalvandoRapidoEmpresa] = useState(false);
+
+  const mascaraCNPJ = (valor: string) => {
+    return valor
+      .replace(/\D/g, '')
+      .replace(/^(\d{2})(\d)/, '$1.$2')
+      .replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
+      .replace(/\.(\d{3})(\d)/, '.$1/$2')
+      .replace(/(\d{4})(\d)/, '$1-$2')
+      .slice(0, 18);
+  };
+
+  const handleSalvarRapidoGestor = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!nomeRapidoGestor.trim()) return;
+    try {
+      setSalvandoRapidoGestor(true);
+      await criarGestor(
+        {
+          nome: nomeRapidoGestor.trim(),
+          lotacao: lotacaoRapidoGestor.trim(),
+          ativo: true
+        },
+        usuarioAtual
+      );
+      setFormNovo((prev) => ({ ...prev, gestor: nomeRapidoGestor.trim() }));
+      setNomeRapidoGestor('');
+      setModalRapidoGestor(false);
+    } catch (err) {
+      console.error('Erro ao criar gestor rápido:', err);
+    } finally {
+      setSalvandoRapidoGestor(false);
+    }
+  };
+
+  const handleSalvarRapidaEmpresa = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!razaoRapidoEmpresa.trim() || !cnpjRapidoEmpresa.trim()) return;
+    try {
+      setSalvandoRapidoEmpresa(true);
+      await criarEmpresaContratada(
+        {
+          razaoSocial: razaoRapidoEmpresa.trim(),
+          cnpj: cnpjRapidoEmpresa.trim(),
+          ativo: true
+        },
+        usuarioAtual
+      );
+      setFormNovo((prev) => ({ ...prev, empresa: razaoRapidoEmpresa.trim() }));
+      setRazaoRapidoEmpresa('');
+      setCnpjRapidoEmpresa('');
+      setModalRapidoEmpresa(false);
+    } catch (err) {
+      console.error('Erro ao criar empresa rápida:', err);
+    } finally {
+      setSalvandoRapidoEmpresa(false);
+    }
+  };
+
   // Unique gestores list for filter
   const gestoresUnicos = useMemo(() => {
     const set = new Set<string>();
     contratos.forEach((c) => {
       if (c.gestor) set.add(c.gestor);
     });
+    gestores.forEach((g) => {
+      if (g.nome) set.add(g.nome);
+    });
     return Array.from(set).sort();
-  }, [contratos]);
+  }, [contratos, gestores]);
 
   // Metrics summary
   const metricas = useMemo(() => {
@@ -564,6 +675,7 @@ export const ContratosVigentesView: React.FC<ContratosVigentesViewProps> = ({
 
             <form onSubmit={handleSalvarNovoContrato} className="space-y-4 text-xs">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Nº do Contrato */}
                 <div>
                   <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
                     Nº do Contrato *
@@ -578,20 +690,116 @@ export const ContratosVigentesView: React.FC<ContratosVigentesViewProps> = ({
                   />
                 </div>
 
+                {/* Empresa Contratada (Dropdown com Razão Social e CNPJ) */}
                 <div>
-                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Empresa Contratada *
-                  </label>
-                  <input
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block font-bold text-slate-700 dark:text-slate-300">
+                      Empresa Contratada *
+                    </label>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setModalRapidoEmpresa(true)}
+                        className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline font-bold flex items-center gap-0.5 cursor-pointer"
+                        title="Cadastrar nova empresa"
+                      >
+                        <Plus className="w-3 h-3" />
+                        <span>Nova Empresa</span>
+                      </button>
+                      {onNavegarParaEmpresas && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setModalNovoContratoAberto(false);
+                            onNavegarParaEmpresas();
+                          }}
+                          className="text-[10px] text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 underline cursor-pointer"
+                          title="Ir para a página de gestão de empresas"
+                        >
+                          Gerenciar
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <select
                     required
-                    type="text"
                     value={formNovo.empresa}
-                    onChange={(e) => setFormNovo({ ...formNovo, empresa: e.target.value })}
-                    placeholder="Razão Social / Nome Fantasia"
+                    onChange={(e) => {
+                      if (e.target.value === '__nova__') {
+                        setModalRapidoEmpresa(true);
+                      } else {
+                        setFormNovo({ ...formNovo, empresa: e.target.value });
+                      }
+                    }}
                     className="w-full p-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  />
+                  >
+                    <option value="">Selecione a Empresa Contratada...</option>
+                    {listaEmpresasOpcoes.map((e) => (
+                      <option key={e.razaoSocial} value={e.razaoSocial}>
+                        {e.razaoSocial} {e.cnpj ? `— CNPJ: ${e.cnpj}` : ''}
+                      </option>
+                    ))}
+                    <option value="__nova__" className="text-blue-600 font-bold">
+                      + Cadastrar Nova Empresa na Base...
+                    </option>
+                  </select>
                 </div>
 
+                {/* Gestor Responsável (Dropdown com lista de gestores) */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block font-bold text-slate-700 dark:text-slate-300">
+                      Gestor Responsável
+                    </label>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setModalRapidoGestor(true)}
+                        className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline font-bold flex items-center gap-0.5 cursor-pointer"
+                        title="Cadastrar novo gestor"
+                      >
+                        <Plus className="w-3 h-3" />
+                        <span>Novo Gestor</span>
+                      </button>
+                      {onNavegarParaGestores && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setModalNovoContratoAberto(false);
+                            onNavegarParaGestores();
+                          }}
+                          className="text-[10px] text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 underline cursor-pointer"
+                          title="Ir para a página de gestão de gestores"
+                        >
+                          Gerenciar
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <select
+                    value={formNovo.gestor}
+                    onChange={(e) => {
+                      if (e.target.value === '__novo__') {
+                        setModalRapidoGestor(true);
+                      } else {
+                        setFormNovo({ ...formNovo, gestor: e.target.value });
+                      }
+                    }}
+                    className="w-full p-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  >
+                    <option value="">Selecione o Gestor Responsável...</option>
+                    {listaGestoresOpcoes.map((g) => (
+                      <option key={g.nome} value={g.nome}>
+                        {g.nome} {g.lotacao ? `(${g.lotacao.split('—')[0].trim()})` : ''}
+                      </option>
+                    ))}
+                    <option value="__novo__" className="text-blue-600 font-bold">
+                      + Cadastrar Novo Gestor na Base...
+                    </option>
+                  </select>
+                </div>
+
+                {/* Projeto */}
                 <div>
                   <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
                     Projeto
@@ -605,19 +813,7 @@ export const ContratosVigentesView: React.FC<ContratosVigentesViewProps> = ({
                   />
                 </div>
 
-                <div>
-                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Gestor Responsável
-                  </label>
-                  <input
-                    type="text"
-                    value={formNovo.gestor}
-                    onChange={(e) => setFormNovo({ ...formNovo, gestor: e.target.value })}
-                    placeholder="Nome do Gestor"
-                    className="w-full p-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  />
-                </div>
-
+                {/* Valor Anual */}
                 <div>
                   <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
                     Valor Anual (R$)
@@ -632,6 +828,7 @@ export const ContratosVigentesView: React.FC<ContratosVigentesViewProps> = ({
                   />
                 </div>
 
+                {/* Data da Ordem de Serviço (OS) */}
                 <div>
                   <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
                     Data da Ordem de Serviço (OS)
@@ -644,9 +841,23 @@ export const ContratosVigentesView: React.FC<ContratosVigentesViewProps> = ({
                   />
                 </div>
 
+                {/* Data Inicial Execução */}
                 <div>
                   <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Data Final de Execução (Término)
+                    Data Inicial Execução
+                  </label>
+                  <input
+                    type="date"
+                    value={formNovo.dataInicialExecucao}
+                    onChange={(e) => setFormNovo({ ...formNovo, dataInicialExecucao: e.target.value })}
+                    className="w-full p-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+
+                {/* Data Final de Execução (Término) */}
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Data Final Execução (Término)
                   </label>
                   <input
                     type="date"
@@ -656,9 +867,36 @@ export const ContratosVigentesView: React.FC<ContratosVigentesViewProps> = ({
                   />
                 </div>
 
+                {/* Data Inicial Vigência */}
                 <div>
                   <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Situação Manual (quando sem processo)
+                    Data Inicial Vigência
+                  </label>
+                  <input
+                    type="date"
+                    value={formNovo.dataInicialVigencia}
+                    onChange={(e) => setFormNovo({ ...formNovo, dataInicialVigencia: e.target.value })}
+                    className="w-full p-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+
+                {/* Data Final Vigência */}
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Data Final Vigência
+                  </label>
+                  <input
+                    type="date"
+                    value={formNovo.dataFinalVigencia}
+                    onChange={(e) => setFormNovo({ ...formNovo, dataFinalVigencia: e.target.value })}
+                    className="w-full p-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+
+                {/* Situação Manual */}
+                <div className="sm:col-span-2">
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Situação Manual (quando sem processo em andamento)
                   </label>
                   <input
                     type="text"
@@ -670,6 +908,7 @@ export const ContratosVigentesView: React.FC<ContratosVigentesViewProps> = ({
                 </div>
               </div>
 
+              {/* Objeto do Contrato */}
               <div>
                 <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
                   Objeto do Contrato
@@ -697,6 +936,138 @@ export const ContratosVigentesView: React.FC<ContratosVigentesViewProps> = ({
                   className="px-4 py-2 rounded-xl bg-blue-700 hover:bg-blue-800 text-white font-bold cursor-pointer disabled:opacity-60"
                 >
                   {salvandoContrato ? 'Cadastrando...' : 'Cadastrar Contrato'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Rápido: Adicionar Gestor */}
+      {modalRapidoGestor && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full border border-slate-200 dark:border-slate-800 shadow-2xl p-5 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2.5">
+              <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <Users className="w-4 h-4 text-blue-600" />
+                Cadastrar Novo Gestor na Base
+              </h4>
+              <button
+                type="button"
+                onClick={() => setModalRapidoGestor(false)}
+                className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 text-xs font-bold"
+              >
+                ✕
+              </button>
+            </div>
+            <form onSubmit={handleSalvarRapidoGestor} className="space-y-3 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Nome do Gestor *
+                </label>
+                <input
+                  required
+                  type="text"
+                  value={nomeRapidoGestor}
+                  onChange={(e) => setNomeRapidoGestor(e.target.value)}
+                  placeholder="Ex: João da Silva"
+                  className="w-full p-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Lotação / Gerência
+                </label>
+                <input
+                  type="text"
+                  value={lotacaoRapidoGestor}
+                  onChange={(e) => setLotacaoRapidoGestor(e.target.value)}
+                  placeholder="Ex: GAD — Gerência Administrativa e de Suporte"
+                  className="w-full p-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setModalRapidoGestor(false)}
+                  className="px-3 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-700 font-bold hover:bg-slate-300"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={salvandoRapidoGestor || !nomeRapidoGestor.trim()}
+                  className="px-3.5 py-1.5 rounded-lg bg-blue-700 hover:bg-blue-800 text-white font-bold cursor-pointer disabled:opacity-60"
+                >
+                  {salvandoRapidoGestor ? 'Salvando...' : 'Salvar e Selecionar'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Rápido: Adicionar Empresa Contratada */}
+      {modalRapidoEmpresa && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full border border-slate-200 dark:border-slate-800 shadow-2xl p-5 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2.5">
+              <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <Building2 className="w-4 h-4 text-indigo-600" />
+                Cadastrar Nova Empresa na Base
+              </h4>
+              <button
+                type="button"
+                onClick={() => setModalRapidoEmpresa(false)}
+                className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 text-xs font-bold"
+              >
+                ✕
+              </button>
+            </div>
+            <form onSubmit={handleSalvarRapidaEmpresa} className="space-y-3 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Razão Social *
+                </label>
+                <input
+                  required
+                  type="text"
+                  value={razaoRapidoEmpresa}
+                  onChange={(e) => setRazaoRapidoEmpresa(e.target.value)}
+                  placeholder="Ex: COMPANHIA DE SERVIÇOS LTDA"
+                  className="w-full p-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  CNPJ *
+                </label>
+                <input
+                  required
+                  type="text"
+                  value={cnpjRapidoEmpresa}
+                  onChange={(e) => setCnpjRapidoEmpresa(mascaraCNPJ(e.target.value))}
+                  placeholder="00.000.000/0000-00"
+                  maxLength={18}
+                  className="w-full p-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setModalRapidoEmpresa(false)}
+                  className="px-3 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-700 font-bold hover:bg-slate-300"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={salvandoRapidoEmpresa || !razaoRapidoEmpresa.trim() || !cnpjRapidoEmpresa.trim()}
+                  className="px-3.5 py-1.5 rounded-lg bg-indigo-700 hover:bg-indigo-800 text-white font-bold cursor-pointer disabled:opacity-60"
+                >
+                  {salvandoRapidoEmpresa ? 'Salvando...' : 'Salvar e Selecionar'}
                 </button>
               </div>
             </form>

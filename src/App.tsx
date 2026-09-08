@@ -10,15 +10,19 @@ import {
   ContratoVigente,
   LotacaoDestino,
   TipoAcao,
-  Usuario
+  Usuario,
+  GestorResponsavel,
+  EmpresaContratada
 } from './types';
 import { TIPOS_ACAO_DISPONIVEIS } from './data/flowTemplates';
 import {
   subscribeProcessos,
   subscribeContratosVigentes,
+  subscribeGestores,
+  subscribeEmpresasContratadas,
   seedExemplosSeVazio
 } from './services/firestoreService';
-import { Header } from './components/Header';
+import { Header, MainTabType } from './components/Header';
 import { LoginScreen } from './components/LoginScreen';
 import { ContratosVigentesView } from './components/ContratosVigentesView';
 import { FichaContratoModal } from './components/FichaContratoModal';
@@ -28,6 +32,8 @@ import { ProcessoDetalhes } from './components/ProcessoDetalhes';
 import { NovoProcessoModal } from './components/NovoProcessoModal';
 import { UsuariosModal } from './components/UsuariosModal';
 import { AguardandoAprovacao } from './components/AguardandoAprovacao';
+import { GestoresView } from './components/GestoresView';
+import { EmpresasView } from './components/EmpresasView';
 import { CompesaLogo } from './components/CompesaLogo';
 import {
   Search,
@@ -46,13 +52,15 @@ import {
 } from 'lucide-react';
 
 function MainDashboard({ usuario }: { usuario: Usuario }) {
-  // Navigation tabs: 'contratos_vigentes' or 'processos'
-  const [currentTab, setCurrentTab] = useState<'contratos_vigentes' | 'processos'>('contratos_vigentes');
+  // Navigation tabs: 'contratos_vigentes', 'processos', 'gestores', 'empresas'
+  const [currentTab, setCurrentTab] = useState<MainTabType>('contratos_vigentes');
   const [currentProcessView, setCurrentProcessView] = useState<'grid' | 'kanban'>('grid');
 
   // Real-time collections
   const [contratos, setContratos] = useState<ContratoVigente[]>([]);
   const [processos, setProcessos] = useState<ProcessoContrato[]>([]);
+  const [gestores, setGestores] = useState<GestorResponsavel[]>([]);
+  const [empresas, setEmpresas] = useState<EmpresaContratada[]>([]);
   const [loadingDados, setLoadingDados] = useState(true);
 
   // Search & filters for Processos tab
@@ -75,7 +83,7 @@ function MainDashboard({ usuario }: { usuario: Usuario }) {
     seedExemplosSeVazio(activeUsuario);
   }, [activeUsuario]);
 
-  // Subscribe to real-time Contratos Vigentes
+  // Subscribe to real-time Contratos Vigentes, Processos, Gestores e Empresas
   useEffect(() => {
     const unsubContratos = subscribeContratosVigentes(
       (lista) => {
@@ -97,9 +105,29 @@ function MainDashboard({ usuario }: { usuario: Usuario }) {
       }
     );
 
+    const unsubGestores = subscribeGestores(
+      (lista) => {
+        setGestores(lista);
+      },
+      (err) => {
+        console.error('Erro ao carregar gestores:', err);
+      }
+    );
+
+    const unsubEmpresas = subscribeEmpresasContratadas(
+      (lista) => {
+        setEmpresas(lista);
+      },
+      (err) => {
+        console.error('Erro ao carregar empresas contratadas:', err);
+      }
+    );
+
     return () => {
       unsubContratos();
       unsubProcessos();
+      unsubGestores();
+      unsubEmpresas();
     };
   }, []);
 
@@ -163,6 +191,8 @@ function MainDashboard({ usuario }: { usuario: Usuario }) {
         onOpenUsuarios={() => setIsUsuariosOpen(true)}
         contratosCount={contratos.length}
         processosCount={processos.length}
+        gestoresCount={gestores.length}
+        empresasCount={empresas.length}
       />
 
       {/* Main Workspace Container */}
@@ -174,6 +204,8 @@ function MainDashboard({ usuario }: { usuario: Usuario }) {
             contratos={contratos}
             processos={processos}
             usuarioAtual={activeUsuario}
+            gestores={gestores}
+            empresas={empresas}
             onSelecionarContrato={(contrato) => setContratoParaFicha(contrato)}
             onAbrirProcessoNesteContrato={(contrato) => {
               setContratoParaNovoProcesso(contrato);
@@ -183,6 +215,8 @@ function MainDashboard({ usuario }: { usuario: Usuario }) {
               setContratoParaNovoProcesso(null);
               setIsNovoProcessoOpen(true);
             }}
+            onNavegarParaGestores={() => setCurrentTab('gestores')}
+            onNavegarParaEmpresas={() => setCurrentTab('empresas')}
           />
         )}
 
@@ -388,6 +422,16 @@ function MainDashboard({ usuario }: { usuario: Usuario }) {
               />
             )}
           </div>
+        )}
+
+        {/* TAB 3: GESTORES RESPONSÁVEIS */}
+        {currentTab === 'gestores' && (
+          <GestoresView usuarioAtual={activeUsuario} />
+        )}
+
+        {/* TAB 4: EMPRESAS CONTRATADAS */}
+        {currentTab === 'empresas' && (
+          <EmpresasView usuarioAtual={activeUsuario} />
         )}
 
       </main>

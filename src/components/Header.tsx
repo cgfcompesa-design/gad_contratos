@@ -18,15 +18,19 @@ import {
 import { PerfilUsuario } from '../types';
 import { CompesaLogo } from './CompesaLogo';
 
+export type MainTabType = 'contratos_vigentes' | 'processos' | 'gestores' | 'empresas';
+
 interface HeaderProps {
-  currentTab: 'contratos_vigentes' | 'processos';
-  onTabChange: (tab: 'contratos_vigentes' | 'processos') => void;
+  currentTab: MainTabType;
+  onTabChange: (tab: MainTabType) => void;
   currentProcessView: 'grid' | 'kanban';
   onProcessViewChange: (view: 'grid' | 'kanban') => void;
   onOpenNovoProcesso: () => void;
   onOpenUsuarios: () => void;
   contratosCount: number;
   processosCount: number;
+  gestoresCount?: number;
+  empresasCount?: number;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -37,7 +41,9 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenNovoProcesso,
   onOpenUsuarios,
   contratosCount,
-  processosCount
+  processosCount,
+  gestoresCount = 0,
+  empresasCount = 0
 }) => {
   const {
     usuario,
@@ -91,12 +97,12 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
             </div>
 
-            {/* Primary Navigation Tabs (Contratos Vigentes vs Processos) */}
-            <nav className="flex items-center p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold">
+            {/* Primary Navigation Tabs */}
+            <nav className="flex flex-wrap items-center p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold gap-0.5">
               <button
                 id="tab-contratos-vigentes"
                 onClick={() => onTabChange('contratos_vigentes')}
-                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg transition-all cursor-pointer ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
                   currentTab === 'contratos_vigentes'
                     ? 'bg-white dark:bg-slate-900 text-blue-700 dark:text-blue-400 shadow-xs ring-1 ring-slate-200 dark:ring-slate-700'
                     : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
@@ -112,7 +118,7 @@ export const Header: React.FC<HeaderProps> = ({
               <button
                 id="tab-processos"
                 onClick={() => onTabChange('processos')}
-                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg transition-all cursor-pointer ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
                   currentTab === 'processos'
                     ? 'bg-white dark:bg-slate-900 text-blue-700 dark:text-blue-400 shadow-xs ring-1 ring-slate-200 dark:ring-slate-700'
                     : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
@@ -123,6 +129,42 @@ export const Header: React.FC<HeaderProps> = ({
                 <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300 font-mono">
                   {processosCount}
                 </span>
+              </button>
+
+              <button
+                id="tab-gestores"
+                onClick={() => onTabChange('gestores')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                  currentTab === 'gestores'
+                    ? 'bg-white dark:bg-slate-900 text-blue-700 dark:text-blue-400 shadow-xs ring-1 ring-slate-200 dark:ring-slate-700'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <Users className="w-3.5 h-3.5" />
+                <span>Gestores</span>
+                {gestoresCount > 0 && (
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-mono">
+                    {gestoresCount}
+                  </span>
+                )}
+              </button>
+
+              <button
+                id="tab-empresas"
+                onClick={() => onTabChange('empresas')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                  currentTab === 'empresas'
+                    ? 'bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-400 shadow-xs ring-1 ring-slate-200 dark:ring-slate-700'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <Building2 className="w-3.5 h-3.5" />
+                <span>Empresas</span>
+                {empresasCount > 0 && (
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-mono">
+                    {empresasCount}
+                  </span>
+                )}
               </button>
             </nav>
           </div>

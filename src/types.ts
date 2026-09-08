@@ -116,3 +116,28 @@ export interface ProcessoContrato {
   etapasConcluidas?: number;
   progressoPercentual?: number;
 }
+
+export interface GestorResponsavel {
+  id: string;
+  nome: string;
+  email?: string;
+  matricula?: string;
+  lotacao?: string;
+  cargo?: string;
+  telefone?: string;
+  ativo?: boolean;
+  criadoEm: string;
+  atualizadoEm: string;
+}
+
+export interface EmpresaContratada {
+  id: string;
+  razaoSocial: string;
+  cnpj: string;
+  nomeFantasia?: string;
+  email?: string;
+  telefone?: string;
+  ativo?: boolean;
+  criadoEm: string;
+  atualizadoEm: string;
+}

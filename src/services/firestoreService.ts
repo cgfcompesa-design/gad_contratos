@@ -25,7 +25,9 @@ import {
   StatusGeralProcesso,
   AnexoEtapa,
   ContratoVigente,
-  StatusPrazo
+  StatusPrazo,
+  GestorResponsavel,
+  EmpresaContratada
 } from '../types';
 import { TEMPLATES_FLUXOS } from '../data/flowTemplates';
 import { calcularStatusPrazo, CONTRATOS_EXEMPLO_GAD } from '../data/sampleContratos';
@@ -852,13 +854,14 @@ export async function seedExemplosSeVazio(usuarioAtual: Usuario) {
   if (hasSeededOrChecked) return;
   hasSeededOrChecked = true;
   try {
+    const agora = new Date().toISOString();
+
     // 1. Seed Contratos Vigentes se a coleção estiver vazia
     const contratosSnap = await getDocs(collection(db, 'contratosVigentes'));
     const contratoIdMap: Record<string, string> = {};
 
     if (contratosSnap.empty) {
       console.log('Populando base de Contratos Vigentes da GAD...');
-      const agora = new Date().toISOString();
 
       for (const item of CONTRATOS_EXEMPLO_GAD) {
         const statusPrazo = calcularStatusPrazo(item.dataFinalExecucao);
@@ -879,11 +882,8 @@ export async function seedExemplosSeVazio(usuarioAtual: Usuario) {
 
     // 2. Seed Processos se a coleção estiver vazia
     const procSnap = await getDocs(collection(db, 'processos'));
-    if (!procSnap.empty) {
-      return; // Already has processes
-    }
-
-    console.log('Populando processos e fluxos da GAD...');
+    if (procSnap.empty) {
+      console.log('Populando processos e fluxos da GAD...');
 
     // Processo 1: Licitação de Novo Contrato para GAD
     const id1 = await criarNovoProcesso({
@@ -1044,8 +1044,242 @@ export async function seedExemplosSeVazio(usuarioAtual: Usuario) {
       });
     }
 
+    // 3. Seed Gestores se vazio
+    const gestoresSnap = await getDocs(collection(db, 'gestores'));
+    if (gestoresSnap.empty) {
+      const gestoresPadrao = [
+        { nome: 'Gildson Barbalho dos Anjos', lotacao: 'GAD — Gerência Administrativa', cargo: 'Gestor de Contratos', email: 'gildson.anjos@compesa.com.br' },
+        { nome: 'Marcio de Andrade Miranda', lotacao: 'GAD — Gerência Administrativa', cargo: 'Gestor Administrativo', email: 'marcio.miranda@compesa.com.br' },
+        { nome: 'Ana Cristina de Albuquerque', lotacao: 'CSG — Serviços Gerais', cargo: 'Coordenadora Técnica', email: 'ana.albuquerque@compesa.com.br' },
+        { nome: 'Roberto Carlos da Silva', lotacao: 'CGF — Gestão de Frotas', cargo: 'Supervisor de Frotas', email: 'roberto.silva@compesa.com.br' },
+        { nome: 'Mariana Duarte Tavares', lotacao: 'GAD — Gerência Administrativa', cargo: 'Analista de Contratos', email: 'mariana.tavares@compesa.com.br' }
+      ];
+      for (const g of gestoresPadrao) {
+        await addDoc(collection(db, 'gestores'), {
+          ...g,
+          ativo: true,
+          criadoEm: agora,
+          atualizadoEm: agora
+        });
+      }
+    }
+
+    // 4. Seed Empresas se vazio
+    const empresasSnap = await getDocs(collection(db, 'empresasContratadas'));
+    if (empresasSnap.empty) {
+      const empresasPadrao = [
+        { razaoSocial: 'ServSul Gestão & Facilities Ltda', cnpj: '12.345.678/0001-90', nomeFantasia: 'ServSul Facilities', email: 'contato@servsul.com.br' },
+        { razaoSocial: 'ClimaFrio Engenharia Térmica Ltda', cnpj: '98.765.432/0001-10', nomeFantasia: 'ClimaFrio', email: 'comercial@climafrio.com.br' },
+        { razaoSocial: 'Segurança Total Vigilância Armada Ltda', cnpj: '45.678.901/0001-23', nomeFantasia: 'Segurança Total', email: 'operacoes@segurancatotal.com.br' },
+        { razaoSocial: 'LocaFácil Frotas e Serviços S/A', cnpj: '23.456.789/0001-45', nomeFantasia: 'LocaFácil', email: 'frotas@locafacil.com.br' },
+        { razaoSocial: 'TeleCom Soluções e Redes Corporativas', cnpj: '34.567.890/0001-67', nomeFantasia: 'TeleCom Soluções', email: 'suporte@telecom.com.br' },
+        { razaoSocial: 'Limpeza & Cia Terceirização de Serviços', cnpj: '56.789.012/0001-89', nomeFantasia: 'Limpeza & Cia', email: 'atendimento@limpezacia.com.br' },
+        { razaoSocial: 'Engenharia Predial Pernambuco Ltda', cnpj: '67.890.123/0001-01', nomeFantasia: 'Predial PE', email: 'obras@predialpe.com.br' }
+      ];
+      for (const emp of empresasPadrao) {
+        await addDoc(collection(db, 'empresasContratadas'), {
+          ...emp,
+          ativo: true,
+          criadoEm: agora,
+          atualizadoEm: agora
+        });
+      }
+    }
+
     console.log('Dados de demonstração populados com sucesso!');
   } catch (error) {
     console.error('Aviso ao popular exemplos:', error);
+  }
+}
+
+// 15. Gestores Responsáveis CRUD
+export function subscribeGestores(
+  onUpdate: (gestores: GestorResponsavel[]) => void,
+  onError?: (err: Error) => void
+) {
+  const q = query(collection(db, 'gestores'), orderBy('nome', 'asc'));
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const lista: GestorResponsavel[] = [];
+      snapshot.forEach((docSnap) => {
+        lista.push({ id: docSnap.id, ...docSnap.data() } as GestorResponsavel);
+      });
+      onUpdate(lista);
+    },
+    (err) => {
+      if (onError) onError(err);
+      else console.error('Erro ao escutar gestores:', err);
+    }
+  );
+}
+
+export async function criarGestor(
+  dados: Omit<GestorResponsavel, 'id' | 'criadoEm' | 'atualizadoEm'>,
+  usuarioAtual: Usuario
+): Promise<string> {
+  const agora = new Date().toISOString();
+  const docRef = await addDoc(collection(db, 'gestores'), {
+    ...dados,
+    ativo: dados.ativo !== undefined ? dados.ativo : true,
+    criadoEm: agora,
+    atualizadoEm: agora
+  });
+
+  try {
+    await addDoc(collection(db, 'auditoria_geral'), {
+      usuario: usuarioAtual.nome,
+      email: usuarioAtual.email,
+      acao: `Cadastrou o gestor responsável "${dados.nome}"`,
+      dataHora: agora,
+      referencia: `Gestor: ${dados.nome}`,
+      tipoAcao: 'criacao'
+    });
+  } catch {
+    // Non-blocking
+  }
+
+  return docRef.id;
+}
+
+export async function atualizarGestor(
+  id: string,
+  dados: Partial<Omit<GestorResponsavel, 'id' | 'criadoEm'>>,
+  usuarioAtual: Usuario
+): Promise<void> {
+  const agora = new Date().toISOString();
+  await updateDoc(doc(db, 'gestores', id), {
+    ...dados,
+    atualizadoEm: agora
+  });
+
+  try {
+    await addDoc(collection(db, 'auditoria_geral'), {
+      usuario: usuarioAtual.nome,
+      email: usuarioAtual.email,
+      acao: `Atualizou o gestor "${dados.nome || id}"`,
+      dataHora: agora,
+      referencia: `Gestor: ${id}`,
+      tipoAcao: 'edicao'
+    });
+  } catch {
+    // Non-blocking
+  }
+}
+
+export async function excluirGestor(
+  id: string,
+  nome: string,
+  usuarioAtual: Usuario
+): Promise<void> {
+  await deleteDoc(doc(db, 'gestores', id));
+
+  try {
+    await addDoc(collection(db, 'auditoria_geral'), {
+      usuario: usuarioAtual.nome,
+      email: usuarioAtual.email,
+      acao: `Excluiu o gestor responsável "${nome}"`,
+      dataHora: new Date().toISOString(),
+      referencia: `Gestor: ${id}`,
+      tipoAcao: 'exclusao'
+    });
+  } catch {
+    // Non-blocking
+  }
+}
+
+// 16. Empresas Contratadas CRUD
+export function subscribeEmpresasContratadas(
+  onUpdate: (empresas: EmpresaContratada[]) => void,
+  onError?: (err: Error) => void
+) {
+  const q = query(collection(db, 'empresasContratadas'), orderBy('razaoSocial', 'asc'));
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const lista: EmpresaContratada[] = [];
+      snapshot.forEach((docSnap) => {
+        lista.push({ id: docSnap.id, ...docSnap.data() } as EmpresaContratada);
+      });
+      onUpdate(lista);
+    },
+    (err) => {
+      if (onError) onError(err);
+      else console.error('Erro ao escutar empresas contratadas:', err);
+    }
+  );
+}
+
+export async function criarEmpresaContratada(
+  dados: Omit<EmpresaContratada, 'id' | 'criadoEm' | 'atualizadoEm'>,
+  usuarioAtual: Usuario
+): Promise<string> {
+  const agora = new Date().toISOString();
+  const docRef = await addDoc(collection(db, 'empresasContratadas'), {
+    ...dados,
+    ativo: dados.ativo !== undefined ? dados.ativo : true,
+    criadoEm: agora,
+    atualizadoEm: agora
+  });
+
+  try {
+    await addDoc(collection(db, 'auditoria_geral'), {
+      usuario: usuarioAtual.nome,
+      email: usuarioAtual.email,
+      acao: `Cadastrou a empresa contratada "${dados.razaoSocial}" (CNPJ: ${dados.cnpj})`,
+      dataHora: agora,
+      referencia: `Empresa: ${dados.razaoSocial}`,
+      tipoAcao: 'criacao'
+    });
+  } catch {
+    // Non-blocking
+  }
+
+  return docRef.id;
+}
+
+export async function atualizarEmpresaContratada(
+  id: string,
+  dados: Partial<Omit<EmpresaContratada, 'id' | 'criadoEm'>>,
+  usuarioAtual: Usuario
+): Promise<void> {
+  const agora = new Date().toISOString();
+  await updateDoc(doc(db, 'empresasContratadas', id), {
+    ...dados,
+    atualizadoEm: agora
+  });
+
+  try {
+    await addDoc(collection(db, 'auditoria_geral'), {
+      usuario: usuarioAtual.nome,
+      email: usuarioAtual.email,
+      acao: `Atualizou os dados da empresa "${dados.razaoSocial || id}"`,
+      dataHora: agora,
+      referencia: `Empresa: ${id}`,
+      tipoAcao: 'edicao'
+    });
+  } catch {
+    // Non-blocking
+  }
+}
+
+export async function excluirEmpresaContratada(
+  id: string,
+  razaoSocial: string,
+  usuarioAtual: Usuario
+): Promise<void> {
+  await deleteDoc(doc(db, 'empresasContratadas', id));
+
+  try {
+    await addDoc(collection(db, 'auditoria_geral'), {
+      usuario: usuarioAtual.nome,
+      email: usuarioAtual.email,
+      acao: `Excluiu a empresa contratada "${razaoSocial}"`,
+      dataHora: new Date().toISOString(),
+      referencia: `Empresa: ${id}`,
+      tipoAcao: 'exclusao'
+    });
+  } catch {
+    // Non-blocking
   }
 }
