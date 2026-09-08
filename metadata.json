@@ -1,0 +1,6 @@
+{
+  "name": "Controle de Contratos GAD",
+  "description": "Sistema de controle e acompanhamento de processos e contratos da Gerência Administrativa e de Suporte (GAD) com fluxos, Gantt, Kanban e auditoria.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
