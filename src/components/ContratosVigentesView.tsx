@@ -565,8 +565,32 @@ export const ContratosVigentesView: React.FC<ContratosVigentesViewProps> = ({
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {contratosFiltrados.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-slate-400">
-                    Nenhum contrato encontrado com os filtros selecionados.
+                  <td colSpan={7} className="py-14 text-center text-slate-500 dark:text-slate-400">
+                    <div className="flex flex-col items-center justify-center gap-2 max-w-md mx-auto">
+                      <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400">
+                        <FileText className="w-6 h-6" />
+                      </div>
+                      <p className="font-bold text-slate-800 dark:text-slate-200 text-sm">
+                        {contratos.length === 0
+                          ? 'Nenhum contrato vigente cadastrado'
+                          : 'Nenhum contrato encontrado com os filtros selecionados'}
+                      </p>
+                      <p className="text-xs text-slate-400">
+                        {contratos.length === 0
+                          ? 'A base está limpa. Utilize o botão abaixo ou no topo para cadastrar os contratos oficiais da sua gerência.'
+                          : 'Tente ajustar os termos da busca ou selecionar outros filtros de gestor e prazo.'}
+                      </p>
+                      {contratos.length === 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setModalNovoContratoAberto(true)}
+                          className="mt-3 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <Plus className="w-4 h-4" />
+                          <span>Cadastrar Contrato Vigente</span>
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ) : (

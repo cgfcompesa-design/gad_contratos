@@ -9,6 +9,7 @@ import {
   deleteDoc,
   onSnapshot,
   query,
+  where,
   orderBy,
   writeBatch
 } from 'firebase/firestore';
@@ -30,7 +31,18 @@ import {
   EmpresaContratada
 } from '../types';
 import { TEMPLATES_FLUXOS } from '../data/flowTemplates';
-import { calcularStatusPrazo, CONTRATOS_EXEMPLO_GAD } from '../data/sampleContratos';
+import { calcularStatusPrazo } from '../data/sampleContratos';
+
+export const NUMEROS_CONTRATOS_FICTICIOS = [
+  'CT.PS.23.1.077',
+  'CT.PS.22.1.003',
+  'CT.PS.21.2.115',
+  'CT.PS.24.1.089',
+  'CT.PS.23.2.203',
+  'CT.OS.22.2.045',
+  'CT.PS.24.2.140',
+  'CT.OS.25.1.012'
+];
 
 export enum OperationType {
   CREATE = 'create',
@@ -232,41 +244,85 @@ function cleanPayload<T extends Record<string, any>>(obj: T): Record<string, any
 
 const COMPESA_CONTRATOS_STORAGE = 'compesa_contratos_backup_v2';
 
+// Purga e limpeza profunda de contratos fictícios para garantir base 100% limpa
+export async function purgarContratosFicticios(): Promise<void> {
+  try {
+    // 1. Limpar do Firestore
+    const colRef = collection(db, 'contratosVigentes');
+    const snap = await getDocs(colRef);
+    const promessas: Promise<void>[] = [];
+
+    snap.forEach((d) => {
+      const data = d.data() as Partial<ContratoVigente>;
+      const isFicticio =
+        d.id.startsWith('contrato-gad-') ||
+        (data.numeroContrato && NUMEROS_CONTRATOS_FICTICIOS.includes(data.numeroContrato));
+
+      if (isFicticio) {
+        promessas.push(deleteDoc(doc(db, 'contratosVigentes', d.id)));
+      }
+    });
+
+    if (promessas.length > 0) {
+      await Promise.all(promessas);
+    }
+
+    // 2. Limpar do localStorage
+    const raw = localStorage.getItem(COMPESA_CONTRATOS_STORAGE);
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          const limpo = parsed.filter((c: Partial<ContratoVigente>) => {
+            if (!c) return false;
+            if (c.id && c.id.startsWith('contrato-gad-')) return false;
+            if (c.numeroContrato && NUMEROS_CONTRATOS_FICTICIOS.includes(c.numeroContrato)) return false;
+            return true;
+          });
+          localStorage.setItem(COMPESA_CONTRATOS_STORAGE, JSON.stringify(limpo));
+        }
+      } catch {}
+    }
+  } catch (err) {
+    console.warn('Erro ao purgar contratos fictícios:', err);
+  }
+}
+
 function getContratosLocal(): ContratoVigente[] {
   try {
     const raw = localStorage.getItem(COMPESA_CONTRATOS_STORAGE);
-    if (raw) {
+    if (raw !== null) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed.map((c) => {
-          let gestor = c.gestor;
-          if (gestor && gestor.includes('Carlos Alberto')) {
-            gestor = 'Gildson Barbalho dos Anjos';
-          }
-          return {
-            ...c,
-            gestor,
-            statusPrazo: calcularStatusPrazo(c.dataFinalExecucao)
-          };
+      if (Array.isArray(parsed)) {
+        const limpo = parsed.filter((c: Partial<ContratoVigente>) => {
+          if (!c) return false;
+          if (c.id && c.id.startsWith('contrato-gad-')) return false;
+          if (c.numeroContrato && NUMEROS_CONTRATOS_FICTICIOS.includes(c.numeroContrato)) return false;
+          return true;
         });
+
+        return limpo.map((c: ContratoVigente) => ({
+          ...c,
+          statusPrazo: calcularStatusPrazo(c.dataFinalExecucao)
+        }));
       }
     }
   } catch (e) {
     console.warn('Erro ao ler contratos do localStorage:', e);
   }
-  const agora = new Date().toISOString();
-  return CONTRATOS_EXEMPLO_GAD.map((item, idx) => ({
-    id: `contrato-gad-${idx + 1}`,
-    ...item,
-    statusPrazo: calcularStatusPrazo(item.dataFinalExecucao),
-    criadoEm: agora,
-    atualizadoEm: agora
-  }));
+  // Base limpa por padrão: NUNCA retornar contratos fictícios inventados!
+  return [];
 }
 
 function setContratosLocal(lista: ContratoVigente[]) {
   try {
-    localStorage.setItem(COMPESA_CONTRATOS_STORAGE, JSON.stringify(lista));
+    const limpo = lista.filter((c) => {
+      if (!c) return false;
+      if (c.id && c.id.startsWith('contrato-gad-')) return false;
+      if (c.numeroContrato && NUMEROS_CONTRATOS_FICTICIOS.includes(c.numeroContrato)) return false;
+      return true;
+    });
+    localStorage.setItem(COMPESA_CONTRATOS_STORAGE, JSON.stringify(limpo));
   } catch (e) {
     console.warn('Erro ao salvar contratos no localStorage:', e);
   }
@@ -281,11 +337,14 @@ function notificarContratos() {
   });
 }
 
-// 4b. Subscribe to Contratos Vigentes (real-time from planilha GAD)
+// 4b. Subscribe to Contratos Vigentes (real-time from Firestore)
 export function subscribeContratosVigentes(
   callback: (contratos: ContratoVigente[]) => void,
   onError?: (err: Error) => void
 ) {
+  // Dispara purga imediata de resíduos fictícios no banco
+  purgarContratosFicticios().catch(() => {});
+
   // Entrega imediata do cache local garantindo zero atraso
   const initial = getContratosLocal().slice().sort((a, b) => (a.numero || 0) - (b.numero || 0));
   callback(initial);
@@ -295,27 +354,38 @@ export function subscribeContratosVigentes(
   const unsubFirestore = onSnapshot(
     colRef,
     (snapshot) => {
-      if (!snapshot.empty) {
-        const lista: ContratoVigente[] = [];
-        snapshot.forEach((d) => {
-          const data = d.data() as ContratoVigente;
-          let gestor = data.gestor;
-          if (gestor && gestor.includes('Carlos Alberto')) {
-            gestor = 'Gildson Barbalho dos Anjos';
-            updateDoc(doc(db, 'contratosVigentes', d.id), { gestor }).catch(() => {});
-          }
-          const statusPrazo = calcularStatusPrazo(data.dataFinalExecucao);
-          lista.push({
-            id: d.id,
-            ...data,
-            gestor,
-            statusPrazo
-          });
+      const lista: ContratoVigente[] = [];
+      const ficticiosParaRemover: string[] = [];
+
+      snapshot.forEach((d) => {
+        const data = d.data() as ContratoVigente;
+        const isFicticio =
+          d.id.startsWith('contrato-gad-') ||
+          (data.numeroContrato && NUMEROS_CONTRATOS_FICTICIOS.includes(data.numeroContrato));
+
+        if (isFicticio) {
+          ficticiosParaRemover.push(d.id);
+          return;
+        }
+
+        const statusPrazo = calcularStatusPrazo(data.dataFinalExecucao);
+        lista.push({
+          id: d.id,
+          ...data,
+          statusPrazo
         });
-        lista.sort((a, b) => (a.numero || 0) - (b.numero || 0));
-        setContratosLocal(lista);
-        notificarContratos();
+      });
+
+      // Exclui do Firestore em segundo plano qualquer resíduo fictício remanescente
+      if (ficticiosParaRemover.length > 0) {
+        ficticiosParaRemover.forEach((docId) => {
+          deleteDoc(doc(db, 'contratosVigentes', docId)).catch(() => {});
+        });
       }
+
+      lista.sort((a, b) => (a.numero || 0) - (b.numero || 0));
+      setContratosLocal(lista);
+      notificarContratos();
     },
     (error) => {
       console.error('Erro ao escutar contratos vigentes no Firestore:', error);
@@ -470,23 +540,59 @@ export async function excluirContratoVigente(
   usuarioAtual: Usuario
 ) {
   const agora = new Date().toISOString();
-  // Exclusão otimista imediata no local
+  // 1. Exclusão otimista imediata no cache local
   const locais = getContratosLocal();
-  const filtrados = locais.filter((c) => c.id !== contratoId && c.numeroContrato !== numeroContrato);
+  const filtrados = locais.filter((c) => {
+    if (contratoId && c.id === contratoId) return false;
+    if (numeroContrato && c.numeroContrato === numeroContrato) return false;
+    return true;
+  });
   setContratosLocal(filtrados);
   notificarContratos();
 
+  // 2. Exclusão definitiva no Firestore
   try {
-    const docRef = doc(db, 'contratosVigentes', contratoId);
-    await deleteDoc(docRef);
+    // a) Tenta deletar por ID do documento
+    if (contratoId && !contratoId.startsWith('contrato-gad-') && !contratoId.startsWith('contrato-')) {
+      try {
+        await deleteDoc(doc(db, 'contratosVigentes', contratoId));
+      } catch (e) {
+        console.warn('Doc ID não encontrado diretamente no Firestore:', e);
+      }
+    }
+
+    // b) Deleta por numeroContrato caso haja documento no Firestore associado
+    if (numeroContrato) {
+      try {
+        const q = query(
+          collection(db, 'contratosVigentes'),
+          where('numeroContrato', '==', numeroContrato)
+        );
+        const snap = await getDocs(q);
+        const promessas: Promise<void>[] = [];
+        snap.forEach((d) => {
+          promessas.push(deleteDoc(doc(db, 'contratosVigentes', d.id)));
+        });
+        if (promessas.length > 0) {
+          await Promise.all(promessas);
+        }
+      } catch (e) {
+        console.warn('Erro ao deletar documento por numeroContrato no Firestore:', e);
+      }
+    }
+
+    // c) Deleta também qualquer doc que tenha exatamente esse ID
+    try {
+      await deleteDoc(doc(db, 'contratosVigentes', contratoId));
+    } catch {}
 
     await addDoc(collection(db, 'auditoria_geral'), {
       contratoId,
       usuario: usuarioAtual.nome,
       email: usuarioAtual.email,
-      acao: `Excluiu o contrato vigente #${numeroContrato}`,
+      acao: `Excluiu definitivamente o contrato vigente #${numeroContrato || contratoId}`,
       dataHora: agora,
-      referencia: `Contrato #${numeroContrato}`,
+      referencia: `Contrato #${numeroContrato || contratoId}`,
       tipoAcao: 'exclusao'
     });
   } catch (err) {
@@ -983,29 +1089,9 @@ export async function seedExemplosSeVazio(usuarioAtual: Usuario) {
   try {
     const agora = new Date().toISOString();
 
-    // 1. Seed Contratos Vigentes se a coleção estiver vazia
-    const contratosSnap = await getDocs(collection(db, 'contratosVigentes'));
+    // 1. Purga definitiva de quaisquer contratos fictícios residuais (NUNCA recriar contratos fictícios!)
+    await purgarContratosFicticios();
     const contratoIdMap: Record<string, string> = {};
-
-    if (contratosSnap.empty) {
-      console.log('Populando base de Contratos Vigentes da GAD...');
-
-      for (const item of CONTRATOS_EXEMPLO_GAD) {
-        const statusPrazo = calcularStatusPrazo(item.dataFinalExecucao);
-        const docRef = await addDoc(collection(db, 'contratosVigentes'), {
-          ...item,
-          statusPrazo,
-          criadoEm: agora,
-          atualizadoEm: agora
-        });
-        contratoIdMap[item.numeroContrato] = docRef.id;
-      }
-    } else {
-      contratosSnap.forEach((d) => {
-        const c = d.data() as ContratoVigente;
-        if (c.numeroContrato) contratoIdMap[c.numeroContrato] = d.id;
-      });
-    }
 
     // 2. Seed Processos se a coleção estiver vazia
     const procSnap = await getDocs(collection(db, 'processos'));
