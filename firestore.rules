@@ -19,6 +19,16 @@ service cloud.firestore {
       }
     }
 
+    // Gestores Responsaveis
+    match /gestores/{gestorId} {
+      allow read, write: if true;
+    }
+
+    // Empresas Contratadas
+    match /empresasContratadas/{empresaId} {
+      allow read, write: if true;
+    }
+
     // Gestao de usuarios e perfis
     match /usuarios/{userId} {
       allow read, write: if true;
