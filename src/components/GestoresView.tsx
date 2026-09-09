@@ -23,13 +23,13 @@ import {
 } from 'lucide-react';
 
 interface GestoresViewProps {
-  gestores: GestorResponsavel[];
+  gestores?: GestorResponsavel[];
   usuarioAtual: Usuario;
   onVoltarParaContratos?: () => void;
 }
 
 export const GestoresView: React.FC<GestoresViewProps> = ({
-  gestores,
+  gestores = [],
   usuarioAtual,
   onVoltarParaContratos
 }) => {
@@ -53,7 +53,8 @@ export const GestoresView: React.FC<GestoresViewProps> = ({
   const [excluindo, setExcluindo] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
-  const gestoresFiltrados = gestores.filter((g) => {
+  const listaGestores = Array.isArray(gestores) ? gestores : [];
+  const gestoresFiltrados = listaGestores.filter((g) => {
     if (!busca.trim()) return true;
     const termo = busca.toLowerCase();
     return (

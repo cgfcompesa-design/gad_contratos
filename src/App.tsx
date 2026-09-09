@@ -426,12 +426,20 @@ function MainDashboard({ usuario }: { usuario: Usuario }) {
 
         {/* TAB 3: GESTORES RESPONSÁVEIS */}
         {currentTab === 'gestores' && (
-          <GestoresView usuarioAtual={activeUsuario} />
+          <GestoresView
+            gestores={gestores}
+            usuarioAtual={activeUsuario}
+            onVoltarParaContratos={() => setCurrentTab('contratos_vigentes')}
+          />
         )}
 
         {/* TAB 4: EMPRESAS CONTRATADAS */}
         {currentTab === 'empresas' && (
-          <EmpresasView usuarioAtual={activeUsuario} />
+          <EmpresasView
+            empresas={empresas}
+            usuarioAtual={activeUsuario}
+            onVoltarParaContratos={() => setCurrentTab('contratos_vigentes')}
+          />
         )}
 
       </main>

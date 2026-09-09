@@ -22,13 +22,13 @@ import {
 } from 'lucide-react';
 
 interface EmpresasViewProps {
-  empresas: EmpresaContratada[];
+  empresas?: EmpresaContratada[];
   usuarioAtual: Usuario;
   onVoltarParaContratos?: () => void;
 }
 
 export const EmpresasView: React.FC<EmpresasViewProps> = ({
-  empresas,
+  empresas = [],
   usuarioAtual,
   onVoltarParaContratos
 }) => {
@@ -62,7 +62,8 @@ export const EmpresasView: React.FC<EmpresasViewProps> = ({
       .slice(0, 18);
   };
 
-  const empresasFiltradas = empresas.filter((emp) => {
+  const listaEmpresas = Array.isArray(empresas) ? empresas : [];
+  const empresasFiltradas = listaEmpresas.filter((emp) => {
     if (!busca.trim()) return true;
     const termo = busca.toLowerCase();
     const termoLimpo = busca.replace(/\D/g, '');
