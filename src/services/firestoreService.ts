@@ -33,16 +33,32 @@ import {
 import { TEMPLATES_FLUXOS } from '../data/flowTemplates';
 import { calcularStatusPrazo } from '../data/sampleContratos';
 
-export const NUMEROS_CONTRATOS_FICTICIOS = [
-  'CT.PS.23.1.077',
-  'CT.PS.22.1.003',
-  'CT.PS.21.2.115',
-  'CT.PS.24.1.089',
-  'CT.PS.23.2.203',
-  'CT.OS.22.2.045',
-  'CT.PS.24.2.140',
-  'CT.OS.25.1.012'
-];
+const COMPESA_EXCLUIDOS_STORAGE = 'compesa_contratos_excluidos_v3';
+
+export function getContratosExcluidos(): Set<string> {
+  try {
+    const raw = localStorage.getItem(COMPESA_EXCLUIDOS_STORAGE);
+    if (raw) return new Set(JSON.parse(raw));
+  } catch {}
+  return new Set();
+}
+
+export function registrarContratoExcluido(id: string, numeroContrato?: string) {
+  const set = getContratosExcluidos();
+  if (id) set.add(id);
+  if (numeroContrato) set.add(numeroContrato.trim());
+  try {
+    localStorage.setItem(COMPESA_EXCLUIDOS_STORAGE, JSON.stringify(Array.from(set)));
+  } catch {}
+}
+
+export function desregistrarContratoExcluido(idOuNumero: string) {
+  const set = getContratosExcluidos();
+  set.delete(idOuNumero.trim());
+  try {
+    localStorage.setItem(COMPESA_EXCLUIDOS_STORAGE, JSON.stringify(Array.from(set)));
+  } catch {}
+}
 
 export enum OperationType {
   CREATE = 'create',
@@ -244,21 +260,15 @@ function cleanPayload<T extends Record<string, any>>(obj: T): Record<string, any
 
 const COMPESA_CONTRATOS_STORAGE = 'compesa_contratos_backup_v2';
 
-// Purga e limpeza profunda de contratos fictícios para garantir base 100% limpa
+// Purga apenas contratos com IDs do seed antigo fictício (contrato-gad-*)
 export async function purgarContratosFicticios(): Promise<void> {
   try {
-    // 1. Limpar do Firestore
     const colRef = collection(db, 'contratosVigentes');
     const snap = await getDocs(colRef);
     const promessas: Promise<void>[] = [];
 
     snap.forEach((d) => {
-      const data = d.data() as Partial<ContratoVigente>;
-      const isFicticio =
-        d.id.startsWith('contrato-gad-') ||
-        (data.numeroContrato && NUMEROS_CONTRATOS_FICTICIOS.includes(data.numeroContrato));
-
-      if (isFicticio) {
+      if (d.id.startsWith('contrato-gad-')) {
         promessas.push(deleteDoc(doc(db, 'contratosVigentes', d.id)));
       }
     });
@@ -266,30 +276,14 @@ export async function purgarContratosFicticios(): Promise<void> {
     if (promessas.length > 0) {
       await Promise.all(promessas);
     }
-
-    // 2. Limpar do localStorage
-    const raw = localStorage.getItem(COMPESA_CONTRATOS_STORAGE);
-    if (raw) {
-      try {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) {
-          const limpo = parsed.filter((c: Partial<ContratoVigente>) => {
-            if (!c) return false;
-            if (c.id && c.id.startsWith('contrato-gad-')) return false;
-            if (c.numeroContrato && NUMEROS_CONTRATOS_FICTICIOS.includes(c.numeroContrato)) return false;
-            return true;
-          });
-          localStorage.setItem(COMPESA_CONTRATOS_STORAGE, JSON.stringify(limpo));
-        }
-      } catch {}
-    }
   } catch (err) {
-    console.warn('Erro ao purgar contratos fictícios:', err);
+    console.warn('Aviso purga de resíduos fictícios:', err);
   }
 }
 
-function getContratosLocal(): ContratoVigente[] {
+export function getContratosLocal(): ContratoVigente[] {
   try {
+    const excluidos = getContratosExcluidos();
     const raw = localStorage.getItem(COMPESA_CONTRATOS_STORAGE);
     if (raw !== null) {
       const parsed = JSON.parse(raw);
@@ -297,7 +291,8 @@ function getContratosLocal(): ContratoVigente[] {
         const limpo = parsed.filter((c: Partial<ContratoVigente>) => {
           if (!c) return false;
           if (c.id && c.id.startsWith('contrato-gad-')) return false;
-          if (c.numeroContrato && NUMEROS_CONTRATOS_FICTICIOS.includes(c.numeroContrato)) return false;
+          if (c.id && excluidos.has(c.id)) return false;
+          if (c.numeroContrato && excluidos.has(c.numeroContrato.trim())) return false;
           return true;
         });
 
@@ -310,16 +305,17 @@ function getContratosLocal(): ContratoVigente[] {
   } catch (e) {
     console.warn('Erro ao ler contratos do localStorage:', e);
   }
-  // Base limpa por padrão: NUNCA retornar contratos fictícios inventados!
   return [];
 }
 
-function setContratosLocal(lista: ContratoVigente[]) {
+export function setContratosLocal(lista: ContratoVigente[]) {
   try {
+    const excluidos = getContratosExcluidos();
     const limpo = lista.filter((c) => {
       if (!c) return false;
       if (c.id && c.id.startsWith('contrato-gad-')) return false;
-      if (c.numeroContrato && NUMEROS_CONTRATOS_FICTICIOS.includes(c.numeroContrato)) return false;
+      if (c.id && excluidos.has(c.id)) return false;
+      if (c.numeroContrato && excluidos.has(c.numeroContrato.trim())) return false;
       return true;
     });
     localStorage.setItem(COMPESA_CONTRATOS_STORAGE, JSON.stringify(limpo));
@@ -330,22 +326,19 @@ function setContratosLocal(lista: ContratoVigente[]) {
 
 const contratosListeners = new Set<(c: ContratoVigente[]) => void>();
 
-function notificarContratos() {
+export function notificarContratos() {
   const lista = getContratosLocal().slice().sort((a, b) => (a.numero || 0) - (b.numero || 0));
   contratosListeners.forEach((cb) => {
     try { cb(lista); } catch (e) { console.error(e); }
   });
 }
 
-// 4b. Subscribe to Contratos Vigentes (real-time from Firestore)
+// 4b. Subscribe to Contratos Vigentes (real-time from Firestore com merge resiliente)
 export function subscribeContratosVigentes(
   callback: (contratos: ContratoVigente[]) => void,
   onError?: (err: Error) => void
 ) {
-  // Dispara purga imediata de resíduos fictícios no banco
-  purgarContratosFicticios().catch(() => {});
-
-  // Entrega imediata do cache local garantindo zero atraso
+  // Entrega imediata do cache local garantindo zero atraso e que novos contratos apareçam
   const initial = getContratosLocal().slice().sort((a, b) => (a.numero || 0) - (b.numero || 0));
   callback(initial);
   contratosListeners.add(callback);
@@ -354,41 +347,76 @@ export function subscribeContratosVigentes(
   const unsubFirestore = onSnapshot(
     colRef,
     (snapshot) => {
-      const lista: ContratoVigente[] = [];
-      const ficticiosParaRemover: string[] = [];
+      const excluidos = getContratosExcluidos();
+      const firestoreDocs: ContratoVigente[] = [];
+      const idsParaExcluirNoBanco: string[] = [];
 
       snapshot.forEach((d) => {
         const data = d.data() as ContratoVigente;
-        const isFicticio =
-          d.id.startsWith('contrato-gad-') ||
-          (data.numeroContrato && NUMEROS_CONTRATOS_FICTICIOS.includes(data.numeroContrato));
+        const isDummy = d.id.startsWith('contrato-gad-');
+        const isExcluido = excluidos.has(d.id) || (data.numeroContrato && excluidos.has(data.numeroContrato.trim()));
 
-        if (isFicticio) {
-          ficticiosParaRemover.push(d.id);
+        if (isDummy || isExcluido) {
+          idsParaExcluirNoBanco.push(d.id);
           return;
         }
 
         const statusPrazo = calcularStatusPrazo(data.dataFinalExecucao);
-        lista.push({
+        firestoreDocs.push({
           id: d.id,
           ...data,
           statusPrazo
         });
       });
 
-      // Exclui do Firestore em segundo plano qualquer resíduo fictício remanescente
-      if (ficticiosParaRemover.length > 0) {
-        ficticiosParaRemover.forEach((docId) => {
+      // Exclui no Firestore resíduos de contratos já excluídos pelo usuário
+      if (idsParaExcluirNoBanco.length > 0) {
+        idsParaExcluirNoBanco.forEach((docId) => {
           deleteDoc(doc(db, 'contratosVigentes', docId)).catch(() => {});
         });
       }
 
-      lista.sort((a, b) => (a.numero || 0) - (b.numero || 0));
-      setContratosLocal(lista);
+      // Merge seguro: preserva contratos locais recentes para que JAMAIS sumam durante salvamento
+      const currentLocal = getContratosLocal();
+      const mapa = new Map<string, ContratoVigente>();
+
+      // Carrega documentos vindos do Firestore
+      firestoreDocs.forEach((c) => {
+        mapa.set(c.id, c);
+        if (c.numeroContrato) {
+          mapa.set(`num_${c.numeroContrato.trim().toLowerCase()}`, c);
+        }
+      });
+
+      // Integra contratos salvos localmente
+      currentLocal.forEach((c) => {
+        if (excluidos.has(c.id) || (c.numeroContrato && excluidos.has(c.numeroContrato.trim()))) return;
+        const chaveNum = c.numeroContrato ? `num_${c.numeroContrato.trim().toLowerCase()}` : '';
+        const correspondenteFirestore = chaveNum ? mapa.get(chaveNum) : undefined;
+
+        if (correspondenteFirestore) {
+          mapa.set(correspondenteFirestore.id, {
+            ...c,
+            id: correspondenteFirestore.id,
+            statusPrazo: calcularStatusPrazo(c.dataFinalExecucao)
+          });
+        } else if (!mapa.has(c.id)) {
+          // Se o Firestore ainda estiver gravando ou offline, NUNCA apaga do local!
+          mapa.set(c.id, c);
+        }
+      });
+
+      // Extrai lista única limpa
+      const mergedList = Array.from(mapa.values())
+        .filter((c, idx, arr) => arr.findIndex((x) => x.id === c.id) === idx)
+        .filter((c) => !c.id.startsWith('contrato-gad-') && !excluidos.has(c.id) && !(c.numeroContrato && excluidos.has(c.numeroContrato.trim())));
+
+      mergedList.sort((a, b) => (a.numero || 0) - (b.numero || 0));
+      setContratosLocal(mergedList);
       notificarContratos();
     },
     (error) => {
-      console.error('Erro ao escutar contratos vigentes no Firestore:', error);
+      console.warn('Aviso Firestore contratos vigentes (operando com cache local resiliente):', error);
       if (onError) onError(error);
     }
   );
@@ -406,7 +434,13 @@ export async function criarContratoVigente(
 ): Promise<string> {
   const agora = new Date().toISOString();
   const statusPrazo = calcularStatusPrazo(dados.dataFinalExecucao);
-  const tempId = `contrato-${Date.now()}`;
+  const tempId = `c_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+
+  // Garante que o número não conste como excluído
+  if (dados.numeroContrato) {
+    desregistrarContratoExcluido(dados.numeroContrato);
+  }
+
   const novo: ContratoVigente = {
     id: tempId,
     ...dados,
@@ -415,37 +449,60 @@ export async function criarContratoVigente(
     atualizadoEm: agora
   };
 
+  // 1. Salva imediatamente no cache local para visibilidade instantânea sem sumir
   const locais = getContratosLocal();
-  locais.push(novo);
+  const idxExistente = locais.findIndex(
+    (c) => c.numeroContrato && c.numeroContrato.trim().toLowerCase() === dados.numeroContrato.trim().toLowerCase()
+  );
+  if (idxExistente !== -1) {
+    locais[idxExistente] = { ...locais[idxExistente], ...novo, id: locais[idxExistente].id };
+  } else {
+    locais.push(novo);
+  }
   setContratosLocal(locais);
   notificarContratos();
 
+  // 2. Persiste no Firestore
   try {
     const colRef = collection(db, 'contratosVigentes');
     const docRef = await addDoc(colRef, cleanPayload({
       ...dados,
-      statusPrazo,
+      statusPrazo: statusPrazo || null,
       criadoEm: agora,
       atualizadoEm: agora
     }));
-    const idx = locais.findIndex((c) => c.id === tempId);
-    if (idx !== -1) {
-      locais[idx].id = docRef.id;
-      setContratosLocal(locais);
-      notificarContratos();
+
+    if (docRef?.id) {
+      const atual = getContratosLocal();
+      const idx = atual.findIndex((c) => c.id === tempId || (c.numeroContrato && c.numeroContrato === dados.numeroContrato));
+      if (idx !== -1) {
+        atual[idx].id = docRef.id;
+        setContratosLocal(atual);
+        notificarContratos();
+      }
     }
-    await addDoc(collection(db, 'auditoria_geral'), {
-      contratoId: docRef.id,
+
+    // Auto-registro opcional não-bloqueante de gestor e empresa
+    if (dados.gestor?.trim()) {
+      autoRegistrarGestorSeNecessario(dados.gestor.trim(), usuarioAtual).catch(() => {});
+    }
+    if (dados.empresa?.trim()) {
+      autoRegistrarEmpresaSeNecessario(dados.empresa.trim(), usuarioAtual).catch(() => {});
+    }
+
+    addDoc(collection(db, 'auditoria_geral'), {
+      contratoId: docRef?.id || tempId,
       usuario: usuarioAtual.nome,
       email: usuarioAtual.email,
       acao: `Cadastrou o contrato vigente #${dados.numeroContrato} (${dados.empresa})`,
       dataHora: agora,
       referencia: `Contrato: ${dados.numeroContrato}`,
       tipoAcao: 'criacao'
-    });
-    return docRef.id;
+    }).catch(() => {});
+
+    return docRef?.id || tempId;
   } catch (err) {
-    console.warn('Erro ao salvar contrato no Firestore (persistido localmente):', err);
+    console.warn('Contrato persistido no cache local garantido. Firestore sincronizará:', err);
     return tempId;
   }
 }
@@ -540,20 +597,23 @@ export async function excluirContratoVigente(
   usuarioAtual: Usuario
 ) {
   const agora = new Date().toISOString();
-  // 1. Exclusão otimista imediata no cache local
+
+  // 1. Marca como excluído para nunca mais ser restaurado por cache ou snapshot antigo
+  registrarContratoExcluido(contratoId, numeroContrato);
+
+  // 2. Exclusão imediata no cache local
   const locais = getContratosLocal();
   const filtrados = locais.filter((c) => {
     if (contratoId && c.id === contratoId) return false;
-    if (numeroContrato && c.numeroContrato === numeroContrato) return false;
+    if (numeroContrato && c.numeroContrato && c.numeroContrato.trim() === numeroContrato.trim()) return false;
     return true;
   });
   setContratosLocal(filtrados);
   notificarContratos();
 
-  // 2. Exclusão definitiva no Firestore
+  // 3. Exclusão definitiva no Firestore
   try {
-    // a) Tenta deletar por ID do documento
-    if (contratoId && !contratoId.startsWith('contrato-gad-') && !contratoId.startsWith('contrato-')) {
+    if (contratoId && !contratoId.startsWith('c_')) {
       try {
         await deleteDoc(doc(db, 'contratosVigentes', contratoId));
       } catch (e) {
@@ -561,12 +621,11 @@ export async function excluirContratoVigente(
       }
     }
 
-    // b) Deleta por numeroContrato caso haja documento no Firestore associado
     if (numeroContrato) {
       try {
         const q = query(
           collection(db, 'contratosVigentes'),
-          where('numeroContrato', '==', numeroContrato)
+          where('numeroContrato', '==', numeroContrato.trim())
         );
         const snap = await getDocs(q);
         const promessas: Promise<void>[] = [];
@@ -581,12 +640,7 @@ export async function excluirContratoVigente(
       }
     }
 
-    // c) Deleta também qualquer doc que tenha exatamente esse ID
-    try {
-      await deleteDoc(doc(db, 'contratosVigentes', contratoId));
-    } catch {}
-
-    await addDoc(collection(db, 'auditoria_geral'), {
+    addDoc(collection(db, 'auditoria_geral'), {
       contratoId,
       usuario: usuarioAtual.nome,
       email: usuarioAtual.email,
@@ -594,45 +648,111 @@ export async function excluirContratoVigente(
       dataHora: agora,
       referencia: `Contrato #${numeroContrato || contratoId}`,
       tipoAcao: 'exclusao'
-    });
+    }).catch(() => {});
   } catch (err) {
-    console.warn('Erro ao excluir contrato no Firestore (removido localmente):', err);
+    console.warn('Erro ao excluir contrato no Firestore (removido do cache local):', err);
   }
 }
 
 // 4g. Import batch contracts (from CSV or spreadsheet)
 export async function importarContratosEmLote(
   contratos: Omit<ContratoVigente, 'id' | 'criadoEm' | 'atualizadoEm' | 'statusPrazo'>[],
-  usuarioAtual: Usuario
+  usuarioAtual: Usuario,
+  substituirBase = false
 ): Promise<number> {
   const agora = new Date().toISOString();
-  const batch = writeBatch(db);
-  const colRef = collection(db, 'contratosVigentes');
+  const locaisExistentes = substituirBase ? [] : getContratosLocal();
+  const mapa = new Map<string, ContratoVigente>();
 
-  contratos.forEach((c) => {
-    const docRef = doc(colRef);
-    const statusPrazo = calcularStatusPrazo(c.dataFinalExecucao);
-    batch.set(docRef, {
-      ...c,
-      statusPrazo,
-      criadoEm: agora,
-      atualizadoEm: agora
+  // Se for incremental, mantém os existentes
+  if (!substituirBase) {
+    locaisExistentes.forEach((c) => {
+      mapa.set(c.id, c);
+      if (c.numeroContrato) mapa.set(`num_${c.numeroContrato.trim().toLowerCase()}`, c);
     });
-  });
+  }
 
-  await batch.commit();
+  const novosSalvos: ContratoVigente[] = [];
+  let proximoNumero = substituirBase ? 1 : locaisExistentes.length + 1;
 
+  for (const c of contratos) {
+    if (c.numeroContrato) {
+      desregistrarContratoExcluido(c.numeroContrato);
+    }
+    const statusPrazo = calcularStatusPrazo(c.dataFinalExecucao);
+    const chaveNum = c.numeroContrato ? `num_${c.numeroContrato.trim().toLowerCase()}` : '';
+    const existente = chaveNum ? mapa.get(chaveNum) : undefined;
+
+    const id = existente?.id || `c_imp_${Date.now()}_${proximoNumero}_${Math.random().toString(36).substring(2, 6)}`;
+    const contratoObj: ContratoVigente = {
+      id,
+      numero: c.numero || (existente ? existente.numero : proximoNumero++),
+      gestor: c.gestor?.trim() || '',
+      numeroContrato: c.numeroContrato?.trim() || '',
+      projeto: c.projeto?.trim() || '',
+      empresa: c.empresa?.trim() || '',
+      objeto: c.objeto?.trim() || '',
+      valorAnual: typeof c.valorAnual === 'number' ? c.valorAnual : 0,
+      dataOrdemServico: c.dataOrdemServico || undefined,
+      dataInicialExecucao: c.dataInicialExecucao || undefined,
+      dataFinalExecucao: c.dataFinalExecucao || undefined,
+      dataInicialVigencia: c.dataInicialVigencia || undefined,
+      dataFinalVigencia: c.dataFinalVigencia || undefined,
+      situacaoManual: c.situacaoManual || existente?.situacaoManual || undefined,
+      statusPrazo,
+      criadoEm: existente?.criadoEm || agora,
+      atualizadoEm: agora
+    };
+
+    mapa.set(id, contratoObj);
+    if (chaveNum) mapa.set(chaveNum, contratoObj);
+    novosSalvos.push(contratoObj);
+
+    if (contratoObj.gestor) autoRegistrarGestorSeNecessario(contratoObj.gestor, usuarioAtual).catch(() => {});
+    if (contratoObj.empresa) autoRegistrarEmpresaSeNecessario(contratoObj.empresa, usuarioAtual).catch(() => {});
+  }
+
+  const listaFinal = Array.from(new Set(mapa.values())).sort((a, b) => (a.numero || 0) - (b.numero || 0));
+  setContratosLocal(listaFinal);
+  notificarContratos();
+
+  // Persistência no Firestore
   try {
-    await addDoc(collection(db, 'auditoria_geral'), {
+    const colRef = collection(db, 'contratosVigentes');
+
+    // Se solicitado substituir base, limpa do Firestore
+    if (substituirBase) {
+      const snapAntigos = await getDocs(colRef);
+      const batchDel = writeBatch(db);
+      snapAntigos.forEach((d) => batchDel.delete(doc(db, 'contratosVigentes', d.id)));
+      await batchDel.commit().catch(() => {});
+    }
+
+    // Grava novos contratos em batches
+    const CHUNK_SIZE = 400;
+    for (let i = 0; i < novosSalvos.length; i += CHUNK_SIZE) {
+      const pedaco = novosSalvos.slice(i, i + CHUNK_SIZE);
+      const batch = writeBatch(db);
+      for (const item of pedaco) {
+        const docRef = doc(colRef);
+        batch.set(docRef, cleanPayload({
+          ...item,
+          id: docRef.id
+        }));
+      }
+      await batch.commit().catch((e) => console.warn('Aviso batch commit firestore:', e));
+    }
+
+    addDoc(collection(db, 'auditoria_geral'), {
       usuario: usuarioAtual.nome,
       email: usuarioAtual.email,
-      acao: `Importou lote de ${contratos.length} contratos vigentes`,
+      acao: `Importou com sucesso ${contratos.length} contratos via planilha (${substituirBase ? 'substituindo base' : 'acrescentando à base'})`,
       dataHora: agora,
-      referencia: 'Importação em Lote',
+      referencia: 'Importação de Planilha',
       tipoAcao: 'criacao'
-    });
-  } catch {
-    // Non-blocking
+    }).catch(() => {});
+  } catch (err) {
+    console.warn('Erro na sincronização em lote com Firestore (preservado no cache local):', err);
   }
 
   return contratos.length;
@@ -1746,4 +1866,49 @@ export async function excluirEmpresaContratada(
   }).catch((err) => {
     console.warn('Aviso ao registrar auditoria:', err?.message);
   });
+}
+
+export async function autoRegistrarGestorSeNecessario(nomeGestor: string, usuarioAtual: Usuario) {
+  const nome = nomeGestor.trim();
+  if (!nome) return;
+  const lista = getGestoresLocal();
+  const jaExiste = lista.some((g) => g.nome.trim().toLowerCase() === nome.toLowerCase());
+  if (!jaExiste) {
+    await criarGestor(
+      {
+        nome,
+        lotacao: 'GAD — Gerência Administrativa e de Suporte',
+        cargo: 'Gestor de Contratos',
+        email: '',
+        matricula: '',
+        telefone: '',
+        ativo: true
+      },
+      usuarioAtual
+    );
+  }
+}
+
+export async function autoRegistrarEmpresaSeNecessario(razaoOuFantasia: string, usuarioAtual: Usuario) {
+  const nome = razaoOuFantasia.trim();
+  if (!nome) return;
+  const lista = getEmpresasLocal();
+  const jaExiste = lista.some(
+    (e) =>
+      e.razaoSocial.trim().toLowerCase() === nome.toLowerCase() ||
+      (e.nomeFantasia && e.nomeFantasia.trim().toLowerCase() === nome.toLowerCase())
+  );
+  if (!jaExiste) {
+    await criarEmpresaContratada(
+      {
+        razaoSocial: nome,
+        nomeFantasia: nome,
+        cnpj: '',
+        email: '',
+        telefone: '',
+        ativo: true
+      },
+      usuarioAtual
+    );
+  }
 }

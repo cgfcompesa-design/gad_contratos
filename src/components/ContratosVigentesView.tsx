@@ -14,6 +14,12 @@ import {
 } from '../services/firestoreService';
 import { EditarContratoModal } from './EditarContratoModal';
 import { ExcluirContratoModal } from './ExcluirContratoModal';
+import { ImportarPlanilhaModal } from './ImportarPlanilhaModal';
+import {
+  ContratoImportadoItem,
+  baixarPlanilhaModeloXLSX,
+  baixarPlanilhaModeloCSV
+} from '../utils/planilhaContratos';
 import {
   Search,
   Filter,
@@ -34,7 +40,10 @@ import {
   Users,
   Settings2,
   Pencil,
-  Trash2
+  Trash2,
+  FileSpreadsheet,
+  Download,
+  CheckCircle2
 } from 'lucide-react';
 
 interface ContratosVigentesViewProps {
@@ -95,6 +104,40 @@ export const ContratosVigentesView: React.FC<ContratosVigentesViewProps> = ({
   const [contratoEmEdicao, setContratoEmEdicao] = useState<ContratoVigente | null>(null);
   const [contratoParaExcluir, setContratoParaExcluir] = useState<ContratoVigente | null>(null);
   const [excluindoContrato, setExcluindoContrato] = useState(false);
+
+  // Estado para Importação de Planilha (.xlsx / .csv)
+  const [modalImportarPlanilhaAberto, setModalImportarPlanilhaAberto] = useState(false);
+  const [toastNotificacao, setToastNotificacao] = useState<{
+    tipo: 'sucesso' | 'erro' | 'info';
+    mensagem: string;
+  } | null>(null);
+
+  const handleImportarContratosPlanilha = async (
+    itens: ContratoImportadoItem[],
+    substituirBase: boolean
+  ) => {
+    const dadosParaSalvar = itens.map((item, idx) => ({
+      numero: substituirBase ? idx + 1 : contratos.length + idx + 1,
+      gestor: item.gestor,
+      numeroContrato: item.numeroContrato,
+      projeto: item.projeto,
+      empresa: item.empresa,
+      objeto: item.objeto,
+      valorAnual: item.valorAnual,
+      dataOrdemServico: item.dataOrdemServico || undefined,
+      dataInicialExecucao: item.dataInicialExecucao || undefined,
+      dataFinalExecucao: item.dataFinalExecucao || undefined,
+      dataInicialVigencia: item.dataInicialVigencia || undefined,
+      dataFinalVigencia: item.dataFinalVigencia || undefined
+    }));
+
+    const total = await importarContratosEmLote(dadosParaSalvar, usuarioAtual, substituirBase);
+    setToastNotificacao({
+      tipo: 'sucesso',
+      mensagem: `${total} contratos importados e salvos com sucesso na base de dados!`
+    });
+    setTimeout(() => setToastNotificacao(null), 6000);
+  };
 
   // Lista unificada de gestores para seleção suspensa estritamente da base oficial de Gestores Responsáveis
   const listaGestoresOpcoes = useMemo(() => {
@@ -327,6 +370,11 @@ export const ContratosVigentesView: React.FC<ContratosVigentesViewProps> = ({
         },
         usuarioAtual
       );
+      setToastNotificacao({
+        tipo: 'sucesso',
+        mensagem: `Contrato ${formNovo.numeroContrato.trim()} cadastrado e sincronizado com sucesso!`
+      });
+      setTimeout(() => setToastNotificacao(null), 5000);
       setModalNovoContratoAberto(false);
       setFormNovo({
         gestor: '',
@@ -351,6 +399,22 @@ export const ContratosVigentesView: React.FC<ContratosVigentesViewProps> = ({
 
   return (
     <div className="space-y-6">
+
+      {/* Notificação Toast */}
+      {toastNotificacao && (
+        <div className="flex items-center justify-between p-3.5 rounded-xl border border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-100 text-xs font-bold shadow-xs animate-in fade-in slide-in-from-top-2">
+          <div className="flex items-center gap-2.5">
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+            <span>{toastNotificacao.mensagem}</span>
+          </div>
+          <button
+            onClick={() => setToastNotificacao(null)}
+            className="text-emerald-700 hover:text-emerald-950 dark:text-emerald-300 cursor-pointer p-1"
+          >
+            ✕
+          </button>
+        </div>
+      )}
       
       {/* Top Banner with Stats Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -473,14 +537,49 @@ export const ContratosVigentesView: React.FC<ContratosVigentesViewProps> = ({
           {/* Action buttons */}
           <div className="flex flex-wrap items-center gap-2">
             {isMasterOuApoio && (
-              <button
-                id="btn-cadastrar-contrato-vigente"
-                onClick={() => setModalNovoContratoAberto(true)}
-                className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold shadow-xs hover:shadow transition-all cursor-pointer"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Novo Contrato Vigente</span>
-              </button>
+              <>
+                <button
+                  id="btn-importar-planilha-contratos"
+                  onClick={() => setModalImportarPlanilhaAberto(true)}
+                  className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 text-emerald-900 dark:text-emerald-200 text-xs font-bold transition-all cursor-pointer shadow-xs"
+                  title="Importar contratos via planilha Excel (.xlsx) ou CSV com as 11 colunas padrão"
+                >
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                  <span>Importar Planilha</span>
+                </button>
+
+                <div className="flex items-center rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-0.5">
+                  <button
+                    type="button"
+                    id="btn-baixar-planilha-modelo-topo"
+                    onClick={baixarPlanilhaModeloXLSX}
+                    className="flex items-center gap-1 px-2.5 py-2 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 text-xs font-semibold cursor-pointer transition"
+                    title="Baixar planilha base oficial (.xlsx) com a ordem das 11 colunas"
+                  >
+                    <Download className="w-3.5 h-3.5 text-slate-500" />
+                    <span>Modelo .xlsx</span>
+                  </button>
+                  <span className="w-px h-4 bg-slate-300 dark:bg-slate-700"></span>
+                  <button
+                    type="button"
+                    id="btn-baixar-planilha-modelo-csv-topo"
+                    onClick={baixarPlanilhaModeloCSV}
+                    className="flex items-center gap-1 px-2.5 py-2 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 text-xs font-semibold cursor-pointer transition"
+                    title="Baixar planilha base oficial (.csv)"
+                  >
+                    <span>.csv</span>
+                  </button>
+                </div>
+
+                <button
+                  id="btn-cadastrar-contrato-vigente"
+                  onClick={() => setModalNovoContratoAberto(true)}
+                  className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold shadow-xs hover:shadow transition-all cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Novo Contrato Vigente</span>
+                </button>
+              </>
             )}
 
             <button
@@ -1156,6 +1255,14 @@ export const ContratosVigentesView: React.FC<ContratosVigentesViewProps> = ({
         excluindo={excluindoContrato}
         onClose={() => setContratoParaExcluir(null)}
         onConfirmar={handleConfirmarExcluirContrato}
+      />
+
+      {/* Modal: Importar Planilha de Contratos (.xlsx / .csv) */}
+      <ImportarPlanilhaModal
+        isOpen={modalImportarPlanilhaAberto}
+        onClose={() => setModalImportarPlanilhaAberto(false)}
+        usuarioAtual={usuarioAtual}
+        onImportarSucesso={handleImportarContratosPlanilha}
       />
 
     </div>
