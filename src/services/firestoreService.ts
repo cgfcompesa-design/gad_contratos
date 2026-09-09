@@ -1043,8 +1043,9 @@ export async function seedExemplosSeVazio(usuarioAtual: Usuario) {
         statusGeral: 'em_andamento'
       });
     }
+  }
 
-    // 3. Seed Gestores se vazio
+  // 3. Seed Gestores se vazio
     const gestoresSnap = await getDocs(collection(db, 'gestores'));
     if (gestoresSnap.empty) {
       const gestoresPadrao = [
