@@ -123,9 +123,9 @@ export const EmpresasView: React.FC<EmpresasViewProps> = ({
           {
             razaoSocial: formData.razaoSocial.trim(),
             cnpj: formData.cnpj.trim(),
-            nomeFantasia: formData.nomeFantasia.trim() || undefined,
-            email: formData.email.trim() || undefined,
-            telefone: formData.telefone.trim() || undefined
+            nomeFantasia: formData.nomeFantasia.trim(),
+            email: formData.email.trim(),
+            telefone: formData.telefone.trim()
           },
           usuarioAtual
         );
@@ -134,19 +134,27 @@ export const EmpresasView: React.FC<EmpresasViewProps> = ({
           {
             razaoSocial: formData.razaoSocial.trim(),
             cnpj: formData.cnpj.trim(),
-            nomeFantasia: formData.nomeFantasia.trim() || undefined,
-            email: formData.email.trim() || undefined,
-            telefone: formData.telefone.trim() || undefined,
+            nomeFantasia: formData.nomeFantasia.trim(),
+            email: formData.email.trim(),
+            telefone: formData.telefone.trim(),
             ativo: true
           },
           usuarioAtual
         );
       }
 
+      setFormData({
+        razaoSocial: '',
+        cnpj: '',
+        nomeFantasia: '',
+        email: '',
+        telefone: ''
+      });
+      setEmpresaEmEdicao(null);
       setModalAberto(false);
     } catch (err: any) {
       console.error('Erro ao salvar empresa:', err);
-      setErro(err.message || 'Erro ao salvar empresa contratada.');
+      setErro(err?.message || 'Erro ao salvar empresa contratada.');
     } finally {
       setSalvando(false);
     }

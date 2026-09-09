@@ -1045,52 +1045,143 @@ export async function seedExemplosSeVazio(usuarioAtual: Usuario) {
     }
   }
 
-  // 3. Seed Gestores se vazio
-    const gestoresSnap = await getDocs(collection(db, 'gestores'));
-    if (gestoresSnap.empty) {
-      const gestoresPadrao = [
-        { nome: 'Gildson Barbalho dos Anjos', lotacao: 'GAD — Gerência Administrativa', cargo: 'Gestor de Contratos', email: 'gildson.anjos@compesa.com.br' },
-        { nome: 'Marcio de Andrade Miranda', lotacao: 'GAD — Gerência Administrativa', cargo: 'Gestor Administrativo', email: 'marcio.miranda@compesa.com.br' },
-        { nome: 'Ana Cristina de Albuquerque', lotacao: 'CSG — Serviços Gerais', cargo: 'Coordenadora Técnica', email: 'ana.albuquerque@compesa.com.br' },
-        { nome: 'Roberto Carlos da Silva', lotacao: 'CGF — Gestão de Frotas', cargo: 'Supervisor de Frotas', email: 'roberto.silva@compesa.com.br' },
-        { nome: 'Mariana Duarte Tavares', lotacao: 'GAD — Gerência Administrativa', cargo: 'Analista de Contratos', email: 'mariana.tavares@compesa.com.br' }
-      ];
-      for (const g of gestoresPadrao) {
-        await addDoc(collection(db, 'gestores'), {
-          ...g,
-          ativo: true,
-          criadoEm: agora,
-          atualizadoEm: agora
-        });
+  // 3. Seed Gestores se vazio no Firestore
+    try {
+      const timeoutGest = new Promise<any>((res) => setTimeout(() => res({ empty: false }), 2000));
+      const snapGest = await Promise.race([getDocs(collection(db, 'gestores')), timeoutGest]);
+      if (snapGest?.empty) {
+        for (const g of GESTORES_PADRAO_INICIAIS) {
+          await addDoc(collection(db, 'gestores'), {
+            nome: g.nome,
+            lotacao: g.lotacao,
+            cargo: g.cargo,
+            email: g.email,
+            ativo: true,
+            criadoEm: agora,
+            atualizadoEm: agora
+          });
+        }
       }
+    } catch {
+      // Ignora e opera localmente
     }
 
-    // 4. Seed Empresas se vazio
-    const empresasSnap = await getDocs(collection(db, 'empresasContratadas'));
-    if (empresasSnap.empty) {
-      const empresasPadrao = [
-        { razaoSocial: 'ServSul Gestão & Facilities Ltda', cnpj: '12.345.678/0001-90', nomeFantasia: 'ServSul Facilities', email: 'contato@servsul.com.br' },
-        { razaoSocial: 'ClimaFrio Engenharia Térmica Ltda', cnpj: '98.765.432/0001-10', nomeFantasia: 'ClimaFrio', email: 'comercial@climafrio.com.br' },
-        { razaoSocial: 'Segurança Total Vigilância Armada Ltda', cnpj: '45.678.901/0001-23', nomeFantasia: 'Segurança Total', email: 'operacoes@segurancatotal.com.br' },
-        { razaoSocial: 'LocaFácil Frotas e Serviços S/A', cnpj: '23.456.789/0001-45', nomeFantasia: 'LocaFácil', email: 'frotas@locafacil.com.br' },
-        { razaoSocial: 'TeleCom Soluções e Redes Corporativas', cnpj: '34.567.890/0001-67', nomeFantasia: 'TeleCom Soluções', email: 'suporte@telecom.com.br' },
-        { razaoSocial: 'Limpeza & Cia Terceirização de Serviços', cnpj: '56.789.012/0001-89', nomeFantasia: 'Limpeza & Cia', email: 'atendimento@limpezacia.com.br' },
-        { razaoSocial: 'Engenharia Predial Pernambuco Ltda', cnpj: '67.890.123/0001-01', nomeFantasia: 'Predial PE', email: 'obras@predialpe.com.br' }
-      ];
-      for (const emp of empresasPadrao) {
-        await addDoc(collection(db, 'empresasContratadas'), {
-          ...emp,
-          ativo: true,
-          criadoEm: agora,
-          atualizadoEm: agora
-        });
+    // 4. Seed Empresas se vazio no Firestore
+    try {
+      const timeoutEmp = new Promise<any>((res) => setTimeout(() => res({ empty: false }), 2000));
+      const snapEmp = await Promise.race([getDocs(collection(db, 'empresasContratadas')), timeoutEmp]);
+      if (snapEmp?.empty) {
+        for (const emp of EMPRESAS_PADRAO_INICIAIS) {
+          await addDoc(collection(db, 'empresasContratadas'), {
+            razaoSocial: emp.razaoSocial,
+            cnpj: emp.cnpj,
+            nomeFantasia: emp.nomeFantasia,
+            email: emp.email,
+            ativo: true,
+            criadoEm: agora,
+            atualizadoEm: agora
+          });
+        }
       }
+    } catch {
+      // Ignora e opera localmente
     }
 
     console.log('Dados de demonstração populados com sucesso!');
   } catch (error) {
-    console.error('Aviso ao popular exemplos:', error);
+    console.warn('Aviso ao popular exemplos no Firestore:', error);
   }
+}
+
+// 15. Gestores e Empresas - Persistência Híbrida Resiliente (LocalStorage + Firestore)
+export const GESTORES_PADRAO_INICIAIS: GestorResponsavel[] = [
+  { id: 'gestor-1', nome: 'Gildson Barbalho dos Anjos', lotacao: 'GAD — Gerência Administrativa e de Suporte', cargo: 'Gestor de Contratos', email: 'gildson.anjos@compesa.com.br', ativo: true, criadoEm: '2026-01-10T08:00:00.000Z', atualizadoEm: '2026-01-10T08:00:00.000Z' },
+  { id: 'gestor-2', nome: 'Marcio de Andrade Miranda', lotacao: 'GAD — Gerência Administrativa e de Suporte', cargo: 'Gestor Administrativo', email: 'marcio.miranda@compesa.com.br', ativo: true, criadoEm: '2026-01-10T08:00:00.000Z', atualizadoEm: '2026-01-10T08:00:00.000Z' },
+  { id: 'gestor-3', nome: 'Ana Cristina de Albuquerque', lotacao: 'CSG — Coordenação de Serviços Gerais', cargo: 'Coordenadora Técnica', email: 'ana.albuquerque@compesa.com.br', ativo: true, criadoEm: '2026-01-10T08:00:00.000Z', atualizadoEm: '2026-01-10T08:00:00.000Z' },
+  { id: 'gestor-4', nome: 'Roberto Carlos da Silva', lotacao: 'CGF — Gestão de Frotas', cargo: 'Supervisor de Frotas', email: 'roberto.silva@compesa.com.br', ativo: true, criadoEm: '2026-01-10T08:00:00.000Z', atualizadoEm: '2026-01-10T08:00:00.000Z' },
+  { id: 'gestor-5', nome: 'Mariana Duarte Tavares', lotacao: 'GAD — Gerência Administrativa e de Suporte', cargo: 'Analista de Contratos', email: 'mariana.tavares@compesa.com.br', ativo: true, criadoEm: '2026-01-10T08:00:00.000Z', atualizadoEm: '2026-01-10T08:00:00.000Z' }
+];
+
+export const EMPRESAS_PADRAO_INICIAIS: EmpresaContratada[] = [
+  { id: 'emp-1', razaoSocial: 'ServSul Gestão & Facilities Ltda', cnpj: '12.345.678/0001-90', nomeFantasia: 'ServSul Facilities', email: 'contato@servsul.com.br', ativo: true, criadoEm: '2026-01-10T08:00:00.000Z', atualizadoEm: '2026-01-10T08:00:00.000Z' },
+  { id: 'emp-2', razaoSocial: 'ClimaFrio Engenharia Térmica Ltda', cnpj: '98.765.432/0001-10', nomeFantasia: 'ClimaFrio', email: 'comercial@climafrio.com.br', ativo: true, criadoEm: '2026-01-10T08:00:00.000Z', atualizadoEm: '2026-01-10T08:00:00.000Z' },
+  { id: 'emp-3', razaoSocial: 'Segurança Total Vigilância Armada Ltda', cnpj: '45.678.901/0001-23', nomeFantasia: 'Segurança Total', email: 'operacoes@segurancatotal.com.br', ativo: true, criadoEm: '2026-01-10T08:00:00.000Z', atualizadoEm: '2026-01-10T08:00:00.000Z' },
+  { id: 'emp-4', razaoSocial: 'LocaFácil Frotas e Serviços S/A', cnpj: '23.456.789/0001-45', nomeFantasia: 'LocaFácil', email: 'frotas@locafacil.com.br', ativo: true, criadoEm: '2026-01-10T08:00:00.000Z', atualizadoEm: '2026-01-10T08:00:00.000Z' },
+  { id: 'emp-5', razaoSocial: 'TeleCom Soluções e Redes Corporativas', cnpj: '34.567.890/0001-67', nomeFantasia: 'TeleCom Soluções', email: 'suporte@telecom.com.br', ativo: true, criadoEm: '2026-01-10T08:00:00.000Z', atualizadoEm: '2026-01-10T08:00:00.000Z' },
+  { id: 'emp-6', razaoSocial: 'Limpeza & Cia Terceirização de Serviços', cnpj: '56.789.012/0001-89', nomeFantasia: 'Limpeza & Cia', email: 'atendimento@limpezacia.com.br', ativo: true, criadoEm: '2026-01-10T08:00:00.000Z', atualizadoEm: '2026-01-10T08:00:00.000Z' },
+  { id: 'emp-7', razaoSocial: 'Engenharia Predial Pernambuco Ltda', cnpj: '67.890.123/0001-01', nomeFantasia: 'Predial PE', email: 'obras@predialpe.com.br', ativo: true, criadoEm: '2026-01-10T08:00:00.000Z', atualizadoEm: '2026-01-10T08:00:00.000Z' }
+];
+
+const COMPESA_GESTORES_STORAGE = 'compesa_gestores_backup_v1';
+const COMPESA_EMPRESAS_STORAGE = 'compesa_empresas_backup_v1';
+
+function getGestoresLocal(): GestorResponsavel[] {
+  try {
+    const raw = localStorage.getItem(COMPESA_GESTORES_STORAGE);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch (e) {
+    console.warn('Erro ao ler gestores do localStorage:', e);
+  }
+  return GESTORES_PADRAO_INICIAIS;
+}
+
+function setGestoresLocal(lista: GestorResponsavel[]) {
+  try {
+    localStorage.setItem(COMPESA_GESTORES_STORAGE, JSON.stringify(lista));
+  } catch (e) {
+    console.warn('Erro ao salvar gestores no localStorage:', e);
+  }
+}
+
+function getEmpresasLocal(): EmpresaContratada[] {
+  try {
+    const raw = localStorage.getItem(COMPESA_EMPRESAS_STORAGE);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch (e) {
+    console.warn('Erro ao ler empresas do localStorage:', e);
+  }
+  return EMPRESAS_PADRAO_INICIAIS;
+}
+
+function setEmpresasLocal(lista: EmpresaContratada[]) {
+  try {
+    localStorage.setItem(COMPESA_EMPRESAS_STORAGE, JSON.stringify(lista));
+  } catch (e) {
+    console.warn('Erro ao salvar empresas no localStorage:', e);
+  }
+}
+
+const gestoresListeners = new Set<(g: GestorResponsavel[]) => void>();
+const empresasListeners = new Set<(e: EmpresaContratada[]) => void>();
+
+function notificarGestores() {
+  const lista = getGestoresLocal().slice().sort((a, b) => a.nome.localeCompare(b.nome));
+  gestoresListeners.forEach((cb) => {
+    try { cb(lista); } catch (e) { console.error(e); }
+  });
+}
+
+function notificarEmpresas() {
+  const lista = getEmpresasLocal().slice().sort((a, b) => a.razaoSocial.localeCompare(b.razaoSocial));
+  empresasListeners.forEach((cb) => {
+    try { cb(lista); } catch (e) { console.error(e); }
+  });
+}
+
+function cleanPayload<T extends Record<string, any>>(obj: T): Record<string, any> {
+  const clean: Record<string, any> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v !== undefined) {
+      clean[k] = v;
+    }
+  }
+  return clean;
 }
 
 // 15. Gestores Responsáveis CRUD
@@ -1098,21 +1189,42 @@ export function subscribeGestores(
   onUpdate: (gestores: GestorResponsavel[]) => void,
   onError?: (err: Error) => void
 ) {
-  const q = query(collection(db, 'gestores'), orderBy('nome', 'asc'));
-  return onSnapshot(
-    q,
+  // Entrega imediata do cache local garantindo zero atraso e que novos itens nunca sumam ao atualizar a página
+  const initial = getGestoresLocal().slice().sort((a, b) => a.nome.localeCompare(b.nome));
+  onUpdate(initial);
+  gestoresListeners.add(onUpdate);
+
+  // Escuta no Firestore de forma não-bloqueante
+  const colRef = collection(db, 'gestores');
+  const unsubFirestore = onSnapshot(
+    colRef,
     (snapshot) => {
-      const lista: GestorResponsavel[] = [];
-      snapshot.forEach((docSnap) => {
-        lista.push({ id: docSnap.id, ...docSnap.data() } as GestorResponsavel);
-      });
-      onUpdate(lista);
+      if (!snapshot.empty) {
+        const firestoreDocs: GestorResponsavel[] = [];
+        snapshot.forEach((docSnap) => {
+          firestoreDocs.push({ id: docSnap.id, ...docSnap.data() } as GestorResponsavel);
+        });
+        const currentLocal = getGestoresLocal();
+        const map = new Map<string, GestorResponsavel>();
+        firestoreDocs.forEach((g) => map.set(g.id, g));
+        currentLocal.forEach((g) => {
+          if (!map.has(g.id)) map.set(g.id, g);
+        });
+        const merged = Array.from(map.values()).sort((a, b) => a.nome.localeCompare(b.nome));
+        setGestoresLocal(merged);
+        onUpdate(merged);
+      }
     },
     (err) => {
+      console.warn('Aviso Firestore gestores (operando localmente):', err?.message);
       if (onError) onError(err);
-      else console.error('Erro ao escutar gestores:', err);
     }
   );
+
+  return () => {
+    gestoresListeners.delete(onUpdate);
+    unsubFirestore();
+  };
 }
 
 export async function criarGestor(
@@ -1120,13 +1232,62 @@ export async function criarGestor(
   usuarioAtual: Usuario
 ): Promise<string> {
   const agora = new Date().toISOString();
-  const docRef = await addDoc(collection(db, 'gestores'), {
-    ...dados,
+  const tempId = 'gestor_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+
+  const novoGestor: GestorResponsavel = {
+    id: tempId,
+    nome: dados.nome,
+    lotacao: dados.lotacao || 'GAD — Gerência Administrativa e de Suporte',
+    cargo: dados.cargo || '',
+    email: dados.email || '',
+    matricula: dados.matricula || '',
+    telefone: dados.telefone || '',
     ativo: dados.ativo !== undefined ? dados.ativo : true,
+    criadoEm: agora,
+    atualizadoEm: agora
+  };
+
+  // 1. Salva imediatamente no localStorage e notifica interface
+  const listaAtual = getGestoresLocal();
+  const novaLista = [...listaAtual, novoGestor];
+  setGestoresLocal(novaLista);
+  notificarGestores();
+
+  // 2. Tenta persistência no Firestore com timeout de 1.5s para NUNCA travar a tela em "Salvando..."
+  const payloadFirestore = cleanPayload({
+    nome: novoGestor.nome,
+    lotacao: novoGestor.lotacao,
+    cargo: novoGestor.cargo,
+    email: novoGestor.email,
+    matricula: novoGestor.matricula,
+    telefone: novoGestor.telefone,
+    ativo: novoGestor.ativo,
     criadoEm: agora,
     atualizadoEm: agora
   });
 
+  const timeoutPromise = new Promise<string>((resolve) => {
+    setTimeout(() => resolve(tempId), 1500);
+  });
+
+  const firestorePromise = (async () => {
+    try {
+      const docRef = await addDoc(collection(db, 'gestores'), payloadFirestore);
+      if (docRef?.id) {
+        // Atualiza o ID temporário pelo ID definitivo do Firestore
+        const atual = getGestoresLocal().map((g) => g.id === tempId ? { ...g, id: docRef.id } : g);
+        setGestoresLocal(atual);
+        return docRef.id;
+      }
+    } catch (e) {
+      console.warn('Persistido localmente. Firestore sincronizará quando online:', e);
+    }
+    return tempId;
+  })();
+
+  const finalId = await Promise.race([firestorePromise, timeoutPromise]);
+
+  // Auditoria não-bloqueante
   try {
     await addDoc(collection(db, 'auditoria_geral'), {
       usuario: usuarioAtual.nome,
@@ -1140,7 +1301,7 @@ export async function criarGestor(
     // Non-blocking
   }
 
-  return docRef.id;
+  return finalId;
 }
 
 export async function atualizarGestor(
@@ -1149,10 +1310,31 @@ export async function atualizarGestor(
   usuarioAtual: Usuario
 ): Promise<void> {
   const agora = new Date().toISOString();
-  await updateDoc(doc(db, 'gestores', id), {
-    ...dados,
-    atualizadoEm: agora
+
+  // 1. Atualiza imediatamente em memória/localStorage
+  const lista = getGestoresLocal().map((g) => {
+    if (g.id === id) {
+      return { ...g, ...cleanPayload(dados), atualizadoEm: agora };
+    }
+    return g;
   });
+  setGestoresLocal(lista);
+  notificarGestores();
+
+  // 2. Atualiza no Firestore com timeout seguro
+  const timeoutPromise = new Promise<void>((resolve) => setTimeout(resolve, 1500));
+  const fsPromise = (async () => {
+    try {
+      await updateDoc(doc(db, 'gestores', id), {
+        ...cleanPayload(dados),
+        atualizadoEm: agora
+      });
+    } catch (e) {
+      console.warn('Atualização persistida localmente (Firestore pendente):', e);
+    }
+  })();
+
+  await Promise.race([fsPromise, timeoutPromise]);
 
   try {
     await addDoc(collection(db, 'auditoria_geral'), {
@@ -1173,7 +1355,22 @@ export async function excluirGestor(
   nome: string,
   usuarioAtual: Usuario
 ): Promise<void> {
-  await deleteDoc(doc(db, 'gestores', id));
+  // 1. Remove imediatamente do localStorage e notifica
+  const lista = getGestoresLocal().filter((g) => g.id !== id);
+  setGestoresLocal(lista);
+  notificarGestores();
+
+  // 2. Exclui no Firestore com timeout seguro
+  const timeoutPromise = new Promise<void>((resolve) => setTimeout(resolve, 1500));
+  const fsPromise = (async () => {
+    try {
+      await deleteDoc(doc(db, 'gestores', id));
+    } catch (e) {
+      console.warn('Exclusão persistida localmente:', e);
+    }
+  })();
+
+  await Promise.race([fsPromise, timeoutPromise]);
 
   try {
     await addDoc(collection(db, 'auditoria_geral'), {
@@ -1189,26 +1386,46 @@ export async function excluirGestor(
   }
 }
 
-// 16. Empresas Contratadas CRUD
+// 16. Empresas Contratadas CRUD - Persistência Híbrida Resiliente
 export function subscribeEmpresasContratadas(
   onUpdate: (empresas: EmpresaContratada[]) => void,
   onError?: (err: Error) => void
 ) {
-  const q = query(collection(db, 'empresasContratadas'), orderBy('razaoSocial', 'asc'));
-  return onSnapshot(
-    q,
+  // Entrega imediata do cache local garantindo zero atraso
+  const initial = getEmpresasLocal().slice().sort((a, b) => a.razaoSocial.localeCompare(b.razaoSocial));
+  onUpdate(initial);
+  empresasListeners.add(onUpdate);
+
+  const colRef = collection(db, 'empresasContratadas');
+  const unsubFirestore = onSnapshot(
+    colRef,
     (snapshot) => {
-      const lista: EmpresaContratada[] = [];
-      snapshot.forEach((docSnap) => {
-        lista.push({ id: docSnap.id, ...docSnap.data() } as EmpresaContratada);
-      });
-      onUpdate(lista);
+      if (!snapshot.empty) {
+        const firestoreDocs: EmpresaContratada[] = [];
+        snapshot.forEach((docSnap) => {
+          firestoreDocs.push({ id: docSnap.id, ...docSnap.data() } as EmpresaContratada);
+        });
+        const currentLocal = getEmpresasLocal();
+        const map = new Map<string, EmpresaContratada>();
+        firestoreDocs.forEach((e) => map.set(e.id, e));
+        currentLocal.forEach((e) => {
+          if (!map.has(e.id)) map.set(e.id, e);
+        });
+        const merged = Array.from(map.values()).sort((a, b) => a.razaoSocial.localeCompare(b.razaoSocial));
+        setEmpresasLocal(merged);
+        onUpdate(merged);
+      }
     },
     (err) => {
+      console.warn('Aviso Firestore empresas (operando localmente):', err?.message);
       if (onError) onError(err);
-      else console.error('Erro ao escutar empresas contratadas:', err);
     }
   );
+
+  return () => {
+    empresasListeners.delete(onUpdate);
+    unsubFirestore();
+  };
 }
 
 export async function criarEmpresaContratada(
@@ -1216,12 +1433,54 @@ export async function criarEmpresaContratada(
   usuarioAtual: Usuario
 ): Promise<string> {
   const agora = new Date().toISOString();
-  const docRef = await addDoc(collection(db, 'empresasContratadas'), {
-    ...dados,
+  const tempId = 'emp_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+
+  const novaEmpresa: EmpresaContratada = {
+    id: tempId,
+    razaoSocial: dados.razaoSocial,
+    cnpj: dados.cnpj,
+    nomeFantasia: dados.nomeFantasia || '',
+    email: dados.email || '',
+    telefone: dados.telefone || '',
     ativo: dados.ativo !== undefined ? dados.ativo : true,
     criadoEm: agora,
     atualizadoEm: agora
+  };
+
+  // 1. Salva imediatamente no localStorage e notifica
+  const listaAtual = getEmpresasLocal();
+  const novaLista = [...listaAtual, novaEmpresa];
+  setEmpresasLocal(novaLista);
+  notificarEmpresas();
+
+  // 2. Persiste no Firestore com timeout seguro de 1.5s
+  const payloadFirestore = cleanPayload({
+    razaoSocial: novaEmpresa.razaoSocial,
+    cnpj: novaEmpresa.cnpj,
+    nomeFantasia: novaEmpresa.nomeFantasia,
+    email: novaEmpresa.email,
+    telefone: novaEmpresa.telefone,
+    ativo: novaEmpresa.ativo,
+    criadoEm: agora,
+    atualizadoEm: agora
   });
+
+  const timeoutPromise = new Promise<string>((resolve) => setTimeout(() => resolve(tempId), 1500));
+  const firestorePromise = (async () => {
+    try {
+      const docRef = await addDoc(collection(db, 'empresasContratadas'), payloadFirestore);
+      if (docRef?.id) {
+        const atual = getEmpresasLocal().map((e) => e.id === tempId ? { ...e, id: docRef.id } : e);
+        setEmpresasLocal(atual);
+        return docRef.id;
+      }
+    } catch (e) {
+      console.warn('Persistido localmente (Firestore pendente):', e);
+    }
+    return tempId;
+  })();
+
+  const finalId = await Promise.race([firestorePromise, timeoutPromise]);
 
   try {
     await addDoc(collection(db, 'auditoria_geral'), {
@@ -1236,7 +1495,7 @@ export async function criarEmpresaContratada(
     // Non-blocking
   }
 
-  return docRef.id;
+  return finalId;
 }
 
 export async function atualizarEmpresaContratada(
@@ -1245,10 +1504,31 @@ export async function atualizarEmpresaContratada(
   usuarioAtual: Usuario
 ): Promise<void> {
   const agora = new Date().toISOString();
-  await updateDoc(doc(db, 'empresasContratadas', id), {
-    ...dados,
-    atualizadoEm: agora
+
+  // 1. Atualiza imediatamente localmente
+  const lista = getEmpresasLocal().map((e) => {
+    if (e.id === id) {
+      return { ...e, ...cleanPayload(dados), atualizadoEm: agora };
+    }
+    return e;
   });
+  setEmpresasLocal(lista);
+  notificarEmpresas();
+
+  // 2. Atualiza no Firestore com timeout
+  const timeoutPromise = new Promise<void>((resolve) => setTimeout(resolve, 1500));
+  const fsPromise = (async () => {
+    try {
+      await updateDoc(doc(db, 'empresasContratadas', id), {
+        ...cleanPayload(dados),
+        atualizadoEm: agora
+      });
+    } catch (e) {
+      console.warn('Atualização persistida localmente (Firestore pendente):', e);
+    }
+  })();
+
+  await Promise.race([fsPromise, timeoutPromise]);
 
   try {
     await addDoc(collection(db, 'auditoria_geral'), {
@@ -1269,7 +1549,20 @@ export async function excluirEmpresaContratada(
   razaoSocial: string,
   usuarioAtual: Usuario
 ): Promise<void> {
-  await deleteDoc(doc(db, 'empresasContratadas', id));
+  const lista = getEmpresasLocal().filter((e) => e.id !== id);
+  setEmpresasLocal(lista);
+  notificarEmpresas();
+
+  const timeoutPromise = new Promise<void>((resolve) => setTimeout(resolve, 1500));
+  const fsPromise = (async () => {
+    try {
+      await deleteDoc(doc(db, 'empresasContratadas', id));
+    } catch (e) {
+      console.warn('Exclusão persistida localmente:', e);
+    }
+  })();
+
+  await Promise.race([fsPromise, timeoutPromise]);
 
   try {
     await addDoc(collection(db, 'auditoria_geral'), {

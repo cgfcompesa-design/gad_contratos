@@ -110,11 +110,11 @@ export const GestoresView: React.FC<GestoresViewProps> = ({
           gestorEmEdicao.id,
           {
             nome: formData.nome.trim(),
-            email: formData.email.trim() || undefined,
-            matricula: formData.matricula.trim() || undefined,
-            lotacao: formData.lotacao.trim() || undefined,
-            cargo: formData.cargo.trim() || undefined,
-            telefone: formData.telefone.trim() || undefined
+            email: formData.email.trim(),
+            matricula: formData.matricula.trim(),
+            lotacao: formData.lotacao.trim(),
+            cargo: formData.cargo.trim(),
+            telefone: formData.telefone.trim()
           },
           usuarioAtual
         );
@@ -122,21 +122,30 @@ export const GestoresView: React.FC<GestoresViewProps> = ({
         await criarGestor(
           {
             nome: formData.nome.trim(),
-            email: formData.email.trim() || undefined,
-            matricula: formData.matricula.trim() || undefined,
-            lotacao: formData.lotacao.trim() || undefined,
-            cargo: formData.cargo.trim() || undefined,
-            telefone: formData.telefone.trim() || undefined,
+            email: formData.email.trim(),
+            matricula: formData.matricula.trim(),
+            lotacao: formData.lotacao.trim(),
+            cargo: formData.cargo.trim(),
+            telefone: formData.telefone.trim(),
             ativo: true
           },
           usuarioAtual
         );
       }
 
+      setFormData({
+        nome: '',
+        email: '',
+        matricula: '',
+        lotacao: 'GAD — Gerência Administrativa e de Suporte',
+        cargo: '',
+        telefone: ''
+      });
+      setGestorEmEdicao(null);
       setModalAberto(false);
     } catch (err: any) {
       console.error('Erro ao salvar gestor:', err);
-      setErro(err.message || 'Erro ao salvar gestor.');
+      setErro(err?.message || 'Erro ao salvar gestor.');
     } finally {
       setSalvando(false);
     }
