@@ -220,34 +220,113 @@ export async function registrarLog(
   }
 }
 
+function cleanPayload<T extends Record<string, any>>(obj: T): Record<string, any> {
+  const clean: Record<string, any> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v !== undefined) {
+      clean[k] = v;
+    }
+  }
+  return clean;
+}
+
+const COMPESA_CONTRATOS_STORAGE = 'compesa_contratos_backup_v2';
+
+function getContratosLocal(): ContratoVigente[] {
+  try {
+    const raw = localStorage.getItem(COMPESA_CONTRATOS_STORAGE);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed.map((c) => {
+          let gestor = c.gestor;
+          if (gestor && gestor.includes('Carlos Alberto')) {
+            gestor = 'Gildson Barbalho dos Anjos';
+          }
+          return {
+            ...c,
+            gestor,
+            statusPrazo: calcularStatusPrazo(c.dataFinalExecucao)
+          };
+        });
+      }
+    }
+  } catch (e) {
+    console.warn('Erro ao ler contratos do localStorage:', e);
+  }
+  const agora = new Date().toISOString();
+  return CONTRATOS_EXEMPLO_GAD.map((item, idx) => ({
+    id: `contrato-gad-${idx + 1}`,
+    ...item,
+    statusPrazo: calcularStatusPrazo(item.dataFinalExecucao),
+    criadoEm: agora,
+    atualizadoEm: agora
+  }));
+}
+
+function setContratosLocal(lista: ContratoVigente[]) {
+  try {
+    localStorage.setItem(COMPESA_CONTRATOS_STORAGE, JSON.stringify(lista));
+  } catch (e) {
+    console.warn('Erro ao salvar contratos no localStorage:', e);
+  }
+}
+
+const contratosListeners = new Set<(c: ContratoVigente[]) => void>();
+
+function notificarContratos() {
+  const lista = getContratosLocal().slice().sort((a, b) => (a.numero || 0) - (b.numero || 0));
+  contratosListeners.forEach((cb) => {
+    try { cb(lista); } catch (e) { console.error(e); }
+  });
+}
+
 // 4b. Subscribe to Contratos Vigentes (real-time from planilha GAD)
 export function subscribeContratosVigentes(
   callback: (contratos: ContratoVigente[]) => void,
   onError?: (err: Error) => void
 ) {
+  // Entrega imediata do cache local garantindo zero atraso
+  const initial = getContratosLocal().slice().sort((a, b) => (a.numero || 0) - (b.numero || 0));
+  callback(initial);
+  contratosListeners.add(callback);
+
   const colRef = collection(db, 'contratosVigentes');
-  return onSnapshot(
+  const unsubFirestore = onSnapshot(
     colRef,
     (snapshot) => {
-      const lista: ContratoVigente[] = [];
-      snapshot.forEach((d) => {
-        const data = d.data() as ContratoVigente;
-        const statusPrazo = calcularStatusPrazo(data.dataFinalExecucao);
-        lista.push({
-          id: d.id,
-          ...data,
-          statusPrazo
+      if (!snapshot.empty) {
+        const lista: ContratoVigente[] = [];
+        snapshot.forEach((d) => {
+          const data = d.data() as ContratoVigente;
+          let gestor = data.gestor;
+          if (gestor && gestor.includes('Carlos Alberto')) {
+            gestor = 'Gildson Barbalho dos Anjos';
+            updateDoc(doc(db, 'contratosVigentes', d.id), { gestor }).catch(() => {});
+          }
+          const statusPrazo = calcularStatusPrazo(data.dataFinalExecucao);
+          lista.push({
+            id: d.id,
+            ...data,
+            gestor,
+            statusPrazo
+          });
         });
-      });
-      // Sort by sequence number ascending
-      lista.sort((a, b) => (a.numero || 0) - (b.numero || 0));
-      callback(lista);
+        lista.sort((a, b) => (a.numero || 0) - (b.numero || 0));
+        setContratosLocal(lista);
+        notificarContratos();
+      }
     },
     (error) => {
-      console.error('Erro ao escutar contratos vigentes:', error);
+      console.error('Erro ao escutar contratos vigentes no Firestore:', error);
       if (onError) onError(error);
     }
   );
+
+  return () => {
+    contratosListeners.delete(callback);
+    unsubFirestore();
+  };
 }
 
 // 4c. Create a new Contrato Vigente
@@ -255,18 +334,36 @@ export async function criarContratoVigente(
   dados: Omit<ContratoVigente, 'id' | 'criadoEm' | 'atualizadoEm' | 'statusPrazo'>,
   usuarioAtual: Usuario
 ): Promise<string> {
-  const colRef = collection(db, 'contratosVigentes');
   const agora = new Date().toISOString();
   const statusPrazo = calcularStatusPrazo(dados.dataFinalExecucao);
-
-  const docRef = await addDoc(colRef, {
+  const tempId = `contrato-${Date.now()}`;
+  const novo: ContratoVigente = {
+    id: tempId,
     ...dados,
     statusPrazo,
     criadoEm: agora,
     atualizadoEm: agora
-  });
+  };
+
+  const locais = getContratosLocal();
+  locais.push(novo);
+  setContratosLocal(locais);
+  notificarContratos();
 
   try {
+    const colRef = collection(db, 'contratosVigentes');
+    const docRef = await addDoc(colRef, cleanPayload({
+      ...dados,
+      statusPrazo,
+      criadoEm: agora,
+      atualizadoEm: agora
+    }));
+    const idx = locais.findIndex((c) => c.id === tempId);
+    if (idx !== -1) {
+      locais[idx].id = docRef.id;
+      setContratosLocal(locais);
+      notificarContratos();
+    }
     await addDoc(collection(db, 'auditoria_geral'), {
       contratoId: docRef.id,
       usuario: usuarioAtual.nome,
@@ -276,11 +373,11 @@ export async function criarContratoVigente(
       referencia: `Contrato: ${dados.numeroContrato}`,
       tipoAcao: 'criacao'
     });
-  } catch {
-    // Non-blocking
+    return docRef.id;
+  } catch (err) {
+    console.warn('Erro ao salvar contrato no Firestore (persistido localmente):', err);
+    return tempId;
   }
-
-  return docRef.id;
 }
 
 // 4d. Update Contrato Vigente
@@ -289,30 +386,43 @@ export async function atualizarContratoVigente(
   dados: Partial<ContratoVigente>,
   usuarioAtual: Usuario
 ) {
-  const docRef = doc(db, 'contratosVigentes', contratoId);
   const agora = new Date().toISOString();
   const statusPrazo = dados.dataFinalExecucao ? calcularStatusPrazo(dados.dataFinalExecucao) : undefined;
 
-  const updatePayload: any = {
-    ...dados,
-    atualizadoEm: agora
-  };
-  if (statusPrazo) updatePayload.statusPrazo = statusPrazo;
-
-  await updateDoc(docRef, updatePayload);
+  // Atualização otimista imediata no local
+  const locais = getContratosLocal();
+  const idx = locais.findIndex((c) => c.id === contratoId || c.numeroContrato === dados.numeroContrato);
+  if (idx !== -1) {
+    locais[idx] = {
+      ...locais[idx],
+      ...dados,
+      statusPrazo: statusPrazo || locais[idx].statusPrazo,
+      atualizadoEm: agora
+    };
+    setContratosLocal(locais);
+    notificarContratos();
+  }
 
   try {
+    const docRef = doc(db, 'contratosVigentes', contratoId);
+    const updatePayload: any = cleanPayload({
+      ...dados,
+      atualizadoEm: agora
+    });
+    if (statusPrazo) updatePayload.statusPrazo = statusPrazo;
+    await updateDoc(docRef, updatePayload);
+
     await addDoc(collection(db, 'auditoria_geral'), {
       contratoId,
       usuario: usuarioAtual.nome,
       email: usuarioAtual.email,
-      acao: `Atualizou os dados do contrato vigente`,
+      acao: `Atualizou os dados do contrato vigente #${dados.numeroContrato || contratoId}`,
       dataHora: agora,
       referencia: `Contrato ID: ${contratoId}`,
       tipoAcao: 'edicao'
     });
-  } catch {
-    // Non-blocking
+  } catch (err) {
+    console.warn('Erro ao atualizar contrato no Firestore (atualizado localmente):', err);
   }
 }
 
@@ -322,24 +432,34 @@ export async function atualizarSituacaoManualContrato(
   situacaoManual: string,
   usuarioAtual: Usuario
 ) {
-  const docRef = doc(db, 'contratosVigentes', contratoId);
-  await updateDoc(docRef, {
-    situacaoManual: situacaoManual.trim(),
-    atualizadoEm: new Date().toISOString()
-  });
+  const agora = new Date().toISOString();
+  const locais = getContratosLocal();
+  const idx = locais.findIndex((c) => c.id === contratoId);
+  if (idx !== -1) {
+    locais[idx].situacaoManual = situacaoManual.trim();
+    locais[idx].atualizadoEm = agora;
+    setContratosLocal(locais);
+    notificarContratos();
+  }
 
   try {
+    const docRef = doc(db, 'contratosVigentes', contratoId);
+    await updateDoc(docRef, {
+      situacaoManual: situacaoManual.trim(),
+      atualizadoEm: agora
+    });
+
     await addDoc(collection(db, 'auditoria_geral'), {
       contratoId,
       usuario: usuarioAtual.nome,
       email: usuarioAtual.email,
       acao: `Definiu observação de situação manual: "${situacaoManual.trim()}"`,
-      dataHora: new Date().toISOString(),
+      dataHora: agora,
       referencia: `Contrato ID: ${contratoId}`,
       tipoAcao: 'edicao'
     });
-  } catch {
-    // Non-blocking
+  } catch (err) {
+    console.warn('Erro ao salvar situação manual no Firestore:', err);
   }
 }
 
@@ -349,21 +469,28 @@ export async function excluirContratoVigente(
   numeroContrato: string,
   usuarioAtual: Usuario
 ) {
-  const docRef = doc(db, 'contratosVigentes', contratoId);
-  await deleteDoc(docRef);
+  const agora = new Date().toISOString();
+  // Exclusão otimista imediata no local
+  const locais = getContratosLocal();
+  const filtrados = locais.filter((c) => c.id !== contratoId && c.numeroContrato !== numeroContrato);
+  setContratosLocal(filtrados);
+  notificarContratos();
 
   try {
+    const docRef = doc(db, 'contratosVigentes', contratoId);
+    await deleteDoc(docRef);
+
     await addDoc(collection(db, 'auditoria_geral'), {
       contratoId,
       usuario: usuarioAtual.nome,
       email: usuarioAtual.email,
       acao: `Excluiu o contrato vigente #${numeroContrato}`,
-      dataHora: new Date().toISOString(),
+      dataHora: agora,
       referencia: `Contrato #${numeroContrato}`,
       tipoAcao: 'exclusao'
     });
-  } catch {
-    // Non-blocking
+  } catch (err) {
+    console.warn('Erro ao excluir contrato no Firestore (removido localmente):', err);
   }
 }
 
@@ -1172,16 +1299,6 @@ function notificarEmpresas() {
   empresasListeners.forEach((cb) => {
     try { cb(lista); } catch (e) { console.error(e); }
   });
-}
-
-function cleanPayload<T extends Record<string, any>>(obj: T): Record<string, any> {
-  const clean: Record<string, any> = {};
-  for (const [k, v] of Object.entries(obj)) {
-    if (v !== undefined) {
-      clean[k] = v;
-    }
-  }
-  return clean;
 }
 
 // 15. Gestores Responsáveis CRUD

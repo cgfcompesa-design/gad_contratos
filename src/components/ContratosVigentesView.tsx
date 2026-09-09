@@ -9,8 +9,11 @@ import {
   criarContratoVigente,
   importarContratosEmLote,
   criarGestor,
-  criarEmpresaContratada
+  criarEmpresaContratada,
+  excluirContratoVigente
 } from '../services/firestoreService';
+import { EditarContratoModal } from './EditarContratoModal';
+import { ExcluirContratoModal } from './ExcluirContratoModal';
 import {
   Search,
   Filter,
@@ -29,7 +32,9 @@ import {
   ShieldCheck,
   Briefcase,
   Users,
-  Settings2
+  Settings2,
+  Pencil,
+  Trash2
 } from 'lucide-react';
 
 interface ContratosVigentesViewProps {
@@ -41,6 +46,8 @@ interface ContratosVigentesViewProps {
   onSelecionarContrato: (contrato: ContratoVigente) => void;
   onAbrirProcessoNesteContrato: (contrato: ContratoVigente) => void;
   onNovoContratoLicitacao: () => void;
+  onEditarContrato?: (contrato: ContratoVigente) => void;
+  onExcluirContrato?: (contrato: ContratoVigente) => void;
   onNavegarParaGestores?: () => void;
   onNavegarParaEmpresas?: () => void;
 }
@@ -54,6 +61,8 @@ export const ContratosVigentesView: React.FC<ContratosVigentesViewProps> = ({
   onSelecionarContrato,
   onAbrirProcessoNesteContrato,
   onNovoContratoLicitacao,
+  onEditarContrato,
+  onExcluirContrato,
   onNavegarParaGestores,
   onNavegarParaEmpresas
 }) => {
@@ -82,33 +91,43 @@ export const ContratosVigentesView: React.FC<ContratosVigentesViewProps> = ({
     situacaoManual: ''
   });
 
-  // Lista unificada de gestores para seleção suspensa
-  const listaGestoresOpcoes = useMemo(() => {
-    const mapa = new Map<string, { nome: string; lotacao?: string }>();
-    gestores.forEach((g) => {
-      if (g.nome) mapa.set(g.nome, { nome: g.nome, lotacao: g.lotacao });
-    });
-    contratos.forEach((c) => {
-      if (c.gestor && !mapa.has(c.gestor)) {
-        mapa.set(c.gestor, { nome: c.gestor });
-      }
-    });
-    return Array.from(mapa.values()).sort((a, b) => a.nome.localeCompare(b.nome));
-  }, [gestores, contratos]);
+  // Estado para Edição e Exclusão de Contratos Vigentes
+  const [contratoEmEdicao, setContratoEmEdicao] = useState<ContratoVigente | null>(null);
+  const [contratoParaExcluir, setContratoParaExcluir] = useState<ContratoVigente | null>(null);
+  const [excluindoContrato, setExcluindoContrato] = useState(false);
 
-  // Lista unificada de empresas contratadas para seleção suspensa
+  // Lista unificada de gestores para seleção suspensa estritamente da base oficial de Gestores Responsáveis
+  const listaGestoresOpcoes = useMemo(() => {
+    return gestores
+      .filter((g) => g.ativo !== false && g.nome)
+      .map((g) => ({ nome: g.nome, lotacao: g.lotacao }))
+      .sort((a, b) => a.nome.localeCompare(b.nome));
+  }, [gestores]);
+
+  // Lista unificada de empresas contratadas para seleção suspensa estritamente da base oficial
   const listaEmpresasOpcoes = useMemo(() => {
-    const mapa = new Map<string, { razaoSocial: string; cnpj?: string }>();
-    empresas.forEach((e) => {
-      if (e.razaoSocial) mapa.set(e.razaoSocial, { razaoSocial: e.razaoSocial, cnpj: e.cnpj });
-    });
-    contratos.forEach((c) => {
-      if (c.empresa && !mapa.has(c.empresa)) {
-        mapa.set(c.empresa, { razaoSocial: c.empresa });
-      }
-    });
-    return Array.from(mapa.values()).sort((a, b) => a.razaoSocial.localeCompare(b.razaoSocial));
-  }, [empresas, contratos]);
+    return empresas
+      .filter((e) => e.ativo !== false && e.razaoSocial)
+      .map((e) => ({ razaoSocial: e.razaoSocial, cnpj: e.cnpj }))
+      .sort((a, b) => a.razaoSocial.localeCompare(b.razaoSocial));
+  }, [empresas]);
+
+  const handleConfirmarExcluirContrato = async () => {
+    if (!contratoParaExcluir) return;
+    try {
+      setExcluindoContrato(true);
+      await excluirContratoVigente(
+        contratoParaExcluir.id,
+        contratoParaExcluir.numeroContrato,
+        usuarioAtual
+      );
+      setContratoParaExcluir(null);
+    } catch (err) {
+      console.error('Erro ao excluir contrato:', err);
+    } finally {
+      setExcluindoContrato(false);
+    }
+  };
 
   // Modais rápidos para inclusão on-the-fly
   const [modalRapidoGestor, setModalRapidoGestor] = useState(false);
@@ -540,7 +559,7 @@ export const ContratosVigentesView: React.FC<ContratosVigentesViewProps> = ({
                 <th className="py-3 px-3">Valor Anual</th>
                 <th className="py-3 px-3">Status de Prazo</th>
                 <th className="py-3 px-3 min-w-[220px]">Situação Atual (Em Tempo Real)</th>
-                <th className="py-3 px-3 text-right">Ações</th>
+                <th className="py-3 px-3 text-right min-w-[210px]">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -636,7 +655,25 @@ export const ContratosVigentesView: React.FC<ContratosVigentesViewProps> = ({
                             className="p-1.5 rounded-lg border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 hover:bg-blue-100 transition-colors text-xs font-bold flex items-center gap-1 cursor-pointer"
                           >
                             <Plus className="w-3.5 h-3.5" />
-                            <span className="hidden sm:inline">Processo</span>
+                            <span className="hidden xl:inline">Processo</span>
+                          </button>
+
+                          <button
+                            title="Corrigir ou editar os dados deste contrato"
+                            onClick={() => onEditarContrato ? onEditarContrato(c) : setContratoEmEdicao(c)}
+                            className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40 text-slate-600 dark:text-slate-300 hover:text-amber-700 dark:hover:text-amber-400 transition-colors text-xs font-bold flex items-center gap-1 cursor-pointer"
+                          >
+                            <Pencil className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                            <span className="hidden sm:inline">Corrigir</span>
+                          </button>
+
+                          <button
+                            title="Excluir este contrato da base vigente"
+                            onClick={() => onExcluirContrato ? onExcluirContrato(c) : setContratoParaExcluir(c)}
+                            className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-600 dark:text-slate-300 hover:text-rose-700 dark:hover:text-rose-400 transition-colors text-xs font-bold flex items-center gap-1 cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
+                            <span className="hidden sm:inline">Excluir</span>
                           </button>
 
                           <button
@@ -1074,6 +1111,28 @@ export const ContratosVigentesView: React.FC<ContratosVigentesViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* Modal: Editar / Corrigir Contrato Vigente */}
+      <EditarContratoModal
+        isOpen={!!contratoEmEdicao}
+        contrato={contratoEmEdicao}
+        usuarioAtual={usuarioAtual}
+        gestores={gestores}
+        empresas={empresas}
+        onClose={() => setContratoEmEdicao(null)}
+        onSalvo={() => setContratoEmEdicao(null)}
+        onNavegarParaGestores={onNavegarParaGestores}
+        onNavegarParaEmpresas={onNavegarParaEmpresas}
+      />
+
+      {/* Modal: Excluir Contrato Vigente */}
+      <ExcluirContratoModal
+        isOpen={!!contratoParaExcluir}
+        contrato={contratoParaExcluir}
+        excluindo={excluindoContrato}
+        onClose={() => setContratoParaExcluir(null)}
+        onConfirmar={handleConfirmarExcluirContrato}
+      />
 
     </div>
   );

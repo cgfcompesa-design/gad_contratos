@@ -24,7 +24,9 @@ import {
   Tag,
   AlertCircle,
   Activity,
-  Layers
+  Layers,
+  Pencil,
+  Trash2
 } from 'lucide-react';
 
 interface FichaContratoModalProps {
@@ -35,6 +37,7 @@ interface FichaContratoModalProps {
   onAbrirProcessoNesteContrato: (contrato: ContratoVigente) => void;
   onVerProcessoDetalhes: (processo: ProcessoContrato) => void;
   onEditarContrato?: (contrato: ContratoVigente) => void;
+  onExcluirContrato?: (contrato: ContratoVigente) => void;
 }
 
 export const FichaContratoModal: React.FC<FichaContratoModalProps> = ({
@@ -44,7 +47,8 @@ export const FichaContratoModal: React.FC<FichaContratoModalProps> = ({
   onClose,
   onAbrirProcessoNesteContrato,
   onVerProcessoDetalhes,
-  onEditarContrato
+  onEditarContrato,
+  onExcluirContrato
 }) => {
   const isMasterOuApoio = usuarioAtual.perfil === 'MASTER' || usuarioAtual.perfil === 'APOIO CONTRATOS';
 
@@ -120,10 +124,32 @@ export const FichaContratoModal: React.FC<FichaContratoModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            {onEditarContrato && (
+              <button
+                onClick={() => onEditarContrato(contrato)}
+                className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40 text-slate-700 dark:text-slate-200 hover:text-amber-700 dark:hover:text-amber-400 transition-colors text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                title="Corrigir ou editar os dados cadastrais deste contrato"
+              >
+                <Pencil className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                <span>Corrigir Contrato</span>
+              </button>
+            )}
+
+            {onExcluirContrato && (
+              <button
+                onClick={() => onExcluirContrato(contrato)}
+                className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-700 dark:text-slate-200 hover:text-rose-700 dark:hover:text-rose-400 transition-colors text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                title="Excluir este contrato da base vigente"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
+                <span>Excluir</span>
+              </button>
+            )}
+
             <button
               id="btn-fechar-ficha-contrato"
               onClick={onClose}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>

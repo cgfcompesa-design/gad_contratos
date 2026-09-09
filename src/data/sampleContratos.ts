@@ -152,7 +152,7 @@ export function calcularSituacaoAtual(contrato: ContratoVigente, processos: Proc
 export const CONTRATOS_EXEMPLO_GAD: Omit<ContratoVigente, 'id' | 'criadoEm' | 'atualizadoEm'>[] = [
   {
     numero: 1,
-    gestor: 'Carlos Alberto Silva (GAD)',
+    gestor: 'Gildson Barbalho dos Anjos',
     numeroContrato: 'CT.PS.23.2.203',
     projeto: 'GO014DGC17',
     empresa: 'ServSul Gestão & Facilities Ltda',
@@ -167,7 +167,7 @@ export const CONTRATOS_EXEMPLO_GAD: Omit<ContratoVigente, 'id' | 'criadoEm' | 'a
   },
   {
     numero: 2,
-    gestor: 'Mariana Fernandes Rocha (CGF)',
+    gestor: 'Roberto Carlos da Silva',
     numeroContrato: 'CT.OS.22.2.045',
     projeto: 'CGF002FLT22',
     empresa: 'Locavel Frotas Nordeste S/A',
@@ -182,7 +182,7 @@ export const CONTRATOS_EXEMPLO_GAD: Omit<ContratoVigente, 'id' | 'criadoEm' | 'a
   },
   {
     numero: 3,
-    gestor: 'Roberto Menezes (CSG)',
+    gestor: 'Marcio de Andrade Miranda',
     numeroContrato: 'CT.PS.24.1.089',
     projeto: 'CSG008MNT24',
     empresa: 'ClimaFrio Engenharia Térmica Ltda',
@@ -197,7 +197,7 @@ export const CONTRATOS_EXEMPLO_GAD: Omit<ContratoVigente, 'id' | 'criadoEm' | 'a
   },
   {
     numero: 4,
-    gestor: 'Patrícia Albuquerque (GAD)',
+    gestor: 'Ana Cristina de Albuquerque',
     numeroContrato: 'CT.PS.21.2.115',
     projeto: 'GAD003SEG21',
     empresa: 'Nordeste Segurança e Vigilância Armada Ltda',
@@ -212,7 +212,7 @@ export const CONTRATOS_EXEMPLO_GAD: Omit<ContratoVigente, 'id' | 'criadoEm' | 'a
   },
   {
     numero: 5,
-    gestor: 'Carlos Alberto Silva (GAD)',
+    gestor: 'Gildson Barbalho dos Anjos',
     numeroContrato: 'CT.PS.23.1.077',
     projeto: 'CSG012LMP23',
     empresa: 'LimpClean Conservação e Serviços Ambientais Ltda',
@@ -227,7 +227,7 @@ export const CONTRATOS_EXEMPLO_GAD: Omit<ContratoVigente, 'id' | 'criadoEm' | 'a
   },
   {
     numero: 6,
-    gestor: 'Mariana Fernandes Rocha (CGF)',
+    gestor: 'Roberto Carlos da Silva',
     numeroContrato: 'CT.OS.25.1.012',
     projeto: 'CGF005TRN25',
     empresa: 'PetroVale Combustíveis & Frotas Ltda',
@@ -242,7 +242,7 @@ export const CONTRATOS_EXEMPLO_GAD: Omit<ContratoVigente, 'id' | 'criadoEm' | 'a
   },
   {
     numero: 7,
-    gestor: 'Roberto Menezes (CSG)',
+    gestor: 'Marcio de Andrade Miranda',
     numeroContrato: 'CT.PS.24.2.140',
     projeto: 'GAD019ENG24',
     empresa: 'Delta Elevadores & Automação Predial',
@@ -257,7 +257,7 @@ export const CONTRATOS_EXEMPLO_GAD: Omit<ContratoVigente, 'id' | 'criadoEm' | 'a
   },
   {
     numero: 8,
-    gestor: 'Patrícia Albuquerque (GAD)',
+    gestor: 'Ana Cristina de Albuquerque',
     numeroContrato: 'CT.PS.22.1.003',
     projeto: 'CSG001RES22',
     empresa: 'EcoResíduos Tratamento & Logística Reversa',

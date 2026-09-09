@@ -20,12 +20,15 @@ import {
   subscribeContratosVigentes,
   subscribeGestores,
   subscribeEmpresasContratadas,
-  seedExemplosSeVazio
+  seedExemplosSeVazio,
+  excluirContratoVigente
 } from './services/firestoreService';
 import { Header, MainTabType } from './components/Header';
 import { LoginScreen } from './components/LoginScreen';
 import { ContratosVigentesView } from './components/ContratosVigentesView';
 import { FichaContratoModal } from './components/FichaContratoModal';
+import { EditarContratoModal } from './components/EditarContratoModal';
+import { ExcluirContratoModal } from './components/ExcluirContratoModal';
 import { ProcessoCard } from './components/ProcessoCard';
 import { KanbanView } from './components/KanbanView';
 import { ProcessoDetalhes } from './components/ProcessoDetalhes';
@@ -72,9 +75,29 @@ function MainDashboard({ usuario }: { usuario: Usuario }) {
   // Modals state
   const [contratoParaFicha, setContratoParaFicha] = useState<ContratoVigente | null>(null);
   const [contratoParaNovoProcesso, setContratoParaNovoProcesso] = useState<ContratoVigente | null>(null);
+  const [contratoParaEditar, setContratoParaEditar] = useState<ContratoVigente | null>(null);
+  const [contratoParaExcluir, setContratoParaExcluir] = useState<ContratoVigente | null>(null);
+  const [excluindoContrato, setExcluindoContrato] = useState(false);
   const [selectedProcessoId, setSelectedProcessoId] = useState<string | null>(null);
   const [isNovoProcessoOpen, setIsNovoProcessoOpen] = useState(false);
   const [isUsuariosOpen, setIsUsuariosOpen] = useState(false);
+
+  const handleConfirmarExcluirContrato = async () => {
+    if (!contratoParaExcluir) return;
+    try {
+      setExcluindoContrato(true);
+      await excluirContratoVigente(
+        contratoParaExcluir.id,
+        contratoParaExcluir.numeroContrato,
+        usuario
+      );
+      setContratoParaExcluir(null);
+    } catch (err) {
+      console.error('Erro ao excluir contrato:', err);
+    } finally {
+      setExcluindoContrato(false);
+    }
+  };
 
   const activeUsuario = usuario;
 
@@ -215,6 +238,8 @@ function MainDashboard({ usuario }: { usuario: Usuario }) {
               setContratoParaNovoProcesso(null);
               setIsNovoProcessoOpen(true);
             }}
+            onEditarContrato={(contrato) => setContratoParaEditar(contrato)}
+            onExcluirContrato={(contrato) => setContratoParaExcluir(contrato)}
             onNavegarParaGestores={() => setCurrentTab('gestores')}
             onNavegarParaEmpresas={() => setCurrentTab('empresas')}
           />
@@ -460,8 +485,44 @@ function MainDashboard({ usuario }: { usuario: Usuario }) {
             setContratoParaFicha(null);
             setSelectedProcessoId(p.id);
           }}
+          onEditarContrato={(c) => {
+            setContratoParaFicha(null);
+            setContratoParaEditar(c);
+          }}
+          onExcluirContrato={(c) => {
+            setContratoParaFicha(null);
+            setContratoParaExcluir(c);
+          }}
         />
       )}
+
+      {/* Modal: Editar Contrato Vigente */}
+      <EditarContratoModal
+        isOpen={!!contratoParaEditar}
+        contrato={contratoParaEditar}
+        usuarioAtual={activeUsuario}
+        gestores={gestores}
+        empresas={empresas}
+        onClose={() => setContratoParaEditar(null)}
+        onSalvo={() => setContratoParaEditar(null)}
+        onNavegarParaGestores={() => {
+          setContratoParaEditar(null);
+          setCurrentTab('gestores');
+        }}
+        onNavegarParaEmpresas={() => {
+          setContratoParaEditar(null);
+          setCurrentTab('empresas');
+        }}
+      />
+
+      {/* Modal: Excluir Contrato Vigente */}
+      <ExcluirContratoModal
+        isOpen={!!contratoParaExcluir}
+        contrato={contratoParaExcluir}
+        excluindo={excluindoContrato}
+        onClose={() => setContratoParaExcluir(null)}
+        onConfirmar={handleConfirmarExcluirContrato}
+      />
 
       {/* Modal: Process Details with Stages Checklist, Gantt & Immutable Audit Logs */}
       {selectedProcesso && (
