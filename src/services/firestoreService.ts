@@ -1288,18 +1288,14 @@ export async function criarGestor(
   const finalId = await Promise.race([firestorePromise, timeoutPromise]);
 
   // Auditoria não-bloqueante
-  try {
-    await addDoc(collection(db, 'auditoria_geral'), {
-      usuario: usuarioAtual.nome,
-      email: usuarioAtual.email,
-      acao: `Cadastrou o gestor responsável "${dados.nome}"`,
-      dataHora: agora,
-      referencia: `Gestor: ${dados.nome}`,
-      tipoAcao: 'criacao'
-    });
-  } catch {
-    // Non-blocking
-  }
+  addDoc(collection(db, 'auditoria_geral'), {
+    usuario: usuarioAtual.nome,
+    email: usuarioAtual.email,
+    acao: `Cadastrou o gestor responsável "${dados.nome}"`,
+    dataHora: agora,
+    referencia: `Gestor: ${dados.nome}`,
+    tipoAcao: 'criacao'
+  }).catch(() => {});
 
   return finalId;
 }
@@ -1336,18 +1332,14 @@ export async function atualizarGestor(
 
   await Promise.race([fsPromise, timeoutPromise]);
 
-  try {
-    await addDoc(collection(db, 'auditoria_geral'), {
-      usuario: usuarioAtual.nome,
-      email: usuarioAtual.email,
-      acao: `Atualizou o gestor "${dados.nome || id}"`,
-      dataHora: agora,
-      referencia: `Gestor: ${id}`,
-      tipoAcao: 'edicao'
-    });
-  } catch {
-    // Non-blocking
-  }
+  addDoc(collection(db, 'auditoria_geral'), {
+    usuario: usuarioAtual.nome,
+    email: usuarioAtual.email,
+    acao: `Atualizou o gestor "${dados.nome || id}"`,
+    dataHora: agora,
+    referencia: `Gestor: ${id}`,
+    tipoAcao: 'edicao'
+  }).catch(() => {});
 }
 
 export async function excluirGestor(
@@ -1360,30 +1352,22 @@ export async function excluirGestor(
   setGestoresLocal(lista);
   notificarGestores();
 
-  // 2. Exclui no Firestore com timeout seguro
-  const timeoutPromise = new Promise<void>((resolve) => setTimeout(resolve, 1500));
-  const fsPromise = (async () => {
-    try {
-      await deleteDoc(doc(db, 'gestores', id));
-    } catch (e) {
-      console.warn('Exclusão persistida localmente:', e);
-    }
-  })();
+  // 2. Dispara exclusão remota no Firestore em background (não-bloqueante)
+  deleteDoc(doc(db, 'gestores', id)).catch((err) => {
+    console.warn('Aviso ao excluir gestor do Firestore:', err?.message);
+  });
 
-  await Promise.race([fsPromise, timeoutPromise]);
-
-  try {
-    await addDoc(collection(db, 'auditoria_geral'), {
-      usuario: usuarioAtual.nome,
-      email: usuarioAtual.email,
-      acao: `Excluiu o gestor responsável "${nome}"`,
-      dataHora: new Date().toISOString(),
-      referencia: `Gestor: ${id}`,
-      tipoAcao: 'exclusao'
-    });
-  } catch {
-    // Non-blocking
-  }
+  // 3. Auditoria geral em background (não-bloqueante)
+  addDoc(collection(db, 'auditoria_geral'), {
+    usuario: usuarioAtual.nome,
+    email: usuarioAtual.email,
+    acao: `Excluiu o gestor responsável "${nome}"`,
+    dataHora: new Date().toISOString(),
+    referencia: `Gestor: ${id}`,
+    tipoAcao: 'exclusao'
+  }).catch((err) => {
+    console.warn('Aviso ao registrar auditoria:', err?.message);
+  });
 }
 
 // 16. Empresas Contratadas CRUD - Persistência Híbrida Resiliente
@@ -1482,18 +1466,14 @@ export async function criarEmpresaContratada(
 
   const finalId = await Promise.race([firestorePromise, timeoutPromise]);
 
-  try {
-    await addDoc(collection(db, 'auditoria_geral'), {
-      usuario: usuarioAtual.nome,
-      email: usuarioAtual.email,
-      acao: `Cadastrou a empresa contratada "${dados.razaoSocial}" (CNPJ: ${dados.cnpj})`,
-      dataHora: agora,
-      referencia: `Empresa: ${dados.razaoSocial}`,
-      tipoAcao: 'criacao'
-    });
-  } catch {
-    // Non-blocking
-  }
+  addDoc(collection(db, 'auditoria_geral'), {
+    usuario: usuarioAtual.nome,
+    email: usuarioAtual.email,
+    acao: `Cadastrou a empresa contratada "${dados.razaoSocial}" (CNPJ: ${dados.cnpj})`,
+    dataHora: agora,
+    referencia: `Empresa: ${dados.razaoSocial}`,
+    tipoAcao: 'criacao'
+  }).catch(() => {});
 
   return finalId;
 }
@@ -1530,18 +1510,14 @@ export async function atualizarEmpresaContratada(
 
   await Promise.race([fsPromise, timeoutPromise]);
 
-  try {
-    await addDoc(collection(db, 'auditoria_geral'), {
-      usuario: usuarioAtual.nome,
-      email: usuarioAtual.email,
-      acao: `Atualizou os dados da empresa "${dados.razaoSocial || id}"`,
-      dataHora: agora,
-      referencia: `Empresa: ${id}`,
-      tipoAcao: 'edicao'
-    });
-  } catch {
-    // Non-blocking
-  }
+  addDoc(collection(db, 'auditoria_geral'), {
+    usuario: usuarioAtual.nome,
+    email: usuarioAtual.email,
+    acao: `Atualizou os dados da empresa "${dados.razaoSocial || id}"`,
+    dataHora: agora,
+    referencia: `Empresa: ${id}`,
+    tipoAcao: 'edicao'
+  }).catch(() => {});
 }
 
 export async function excluirEmpresaContratada(
@@ -1553,27 +1529,18 @@ export async function excluirEmpresaContratada(
   setEmpresasLocal(lista);
   notificarEmpresas();
 
-  const timeoutPromise = new Promise<void>((resolve) => setTimeout(resolve, 1500));
-  const fsPromise = (async () => {
-    try {
-      await deleteDoc(doc(db, 'empresasContratadas', id));
-    } catch (e) {
-      console.warn('Exclusão persistida localmente:', e);
-    }
-  })();
+  deleteDoc(doc(db, 'empresasContratadas', id)).catch((err) => {
+    console.warn('Aviso ao excluir empresa do Firestore:', err?.message);
+  });
 
-  await Promise.race([fsPromise, timeoutPromise]);
-
-  try {
-    await addDoc(collection(db, 'auditoria_geral'), {
-      usuario: usuarioAtual.nome,
-      email: usuarioAtual.email,
-      acao: `Excluiu a empresa contratada "${razaoSocial}"`,
-      dataHora: new Date().toISOString(),
-      referencia: `Empresa: ${id}`,
-      tipoAcao: 'exclusao'
-    });
-  } catch {
-    // Non-blocking
-  }
+  addDoc(collection(db, 'auditoria_geral'), {
+    usuario: usuarioAtual.nome,
+    email: usuarioAtual.email,
+    acao: `Excluiu a empresa contratada "${razaoSocial}"`,
+    dataHora: new Date().toISOString(),
+    referencia: `Empresa: ${id}`,
+    tipoAcao: 'exclusao'
+  }).catch((err) => {
+    console.warn('Aviso ao registrar auditoria:', err?.message);
+  });
 }

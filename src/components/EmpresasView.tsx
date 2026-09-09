@@ -163,15 +163,16 @@ export const EmpresasView: React.FC<EmpresasViewProps> = ({
   const handleConfirmarExclusao = async () => {
     if (!empresaParaExcluir) return;
 
+    const alvo = empresaParaExcluir;
+    // Fecha imediatamente o modal e reseta o estado
+    setEmpresaParaExcluir(null);
+    setExcluindo(false);
+
     try {
-      setExcluindo(true);
-      await excluirEmpresaContratada(empresaParaExcluir.id, empresaParaExcluir.razaoSocial, usuarioAtual);
-      setEmpresaParaExcluir(null);
+      await excluirEmpresaContratada(alvo.id, alvo.razaoSocial, usuarioAtual);
     } catch (err: any) {
       console.error('Erro ao excluir empresa:', err);
-      alert('Erro ao excluir empresa: ' + (err.message || 'Erro desconhecido'));
-    } finally {
-      setExcluindo(false);
+      alert('Erro ao excluir empresa: ' + (err?.message || 'Erro desconhecido'));
     }
   };
 

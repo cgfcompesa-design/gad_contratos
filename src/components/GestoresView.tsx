@@ -154,15 +154,16 @@ export const GestoresView: React.FC<GestoresViewProps> = ({
   const handleConfirmarExclusao = async () => {
     if (!gestorParaExcluir) return;
 
+    const alvo = gestorParaExcluir;
+    // Fecha imediatamente o modal e reseta o estado
+    setGestorParaExcluir(null);
+    setExcluindo(false);
+
     try {
-      setExcluindo(true);
-      await excluirGestor(gestorParaExcluir.id, gestorParaExcluir.nome, usuarioAtual);
-      setGestorParaExcluir(null);
+      await excluirGestor(alvo.id, alvo.nome, usuarioAtual);
     } catch (err: any) {
       console.error('Erro ao excluir gestor:', err);
-      alert('Erro ao excluir gestor: ' + (err.message || 'Erro desconhecido'));
-    } finally {
-      setExcluindo(false);
+      alert('Erro ao excluir gestor: ' + (err?.message || 'Erro desconhecido'));
     }
   };
 
